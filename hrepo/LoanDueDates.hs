@@ -32,6 +32,7 @@ ldLoansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedCol
 ldLoansPaidOff = filter (\(_,y) -> y >= 0) $ idsActualColnMinusExpectedColn  ldLoansTotalCollections ldLoansExpectedCollections
 ldTotalOutstanding = (-1) * (sum $ map (\(_,b) -> b) ldLoansOutstanding )
 
+
 --USD loans
 
 sqlUSDloanRecords <- queryDatabase "loans.sql" "SELECT id, loan_id, take_out_dt, rate, loan_amt_usd FROM loans WHERE status = 'approved' "
@@ -47,12 +48,14 @@ usdLoansCollections = idsCollections usdLoanIDs usdLoanCollectionRecords
 usdLoansTotalCollections = map (\(a, b) -> (a, sum b)) usdLoansCollections
 usdTotalCollections = sum $ map (\(_, b) -> b) usdLoansTotalCollections
 
-usdLoansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedColn usdLoanIDs usdLoansTotalCollections usdLoansExpectedCollections
-usdLoansPaidOff = filter (\(_,y) -> y >= 0) $ idsActualColnMinusExpectedColn usdLoanIDs usdLoansTotalCollections usdLoansExpectedCollections
-usdTotalOutstanding = (-1) * ( sum $ map (\(_,b) -> b) usdLoansUnpaidOff )
+usdLoansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedColn  usdLoansTotalCollections usdLoansExpectedCollections
+usdLoansPaidOff = filter (\(_,y) -> y >= 0) $ idsActualColnMinusExpectedColn  usdLoansTotalCollections usdLoansExpectedCollections
+usdTotalOutstanding = (-1) * ( sum $ map (\(_,b) -> b) usdLoansOutstanding )
 
 xchangeRate  = 115 :: Double
 totalExpectedCollections = ldTotalExpectedCollections / xchangeRate + usdTotalExpectedCollections
+totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
+totalOutstanding = totalExpectedCollections - totalCollection
 -}
 
 idCollections :: String -> [(String, Double)] -> [(String, [Double])]

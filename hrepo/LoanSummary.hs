@@ -58,7 +58,7 @@ plotList [PNG "gnu_line.png", Title "line", YRange (0.0, 20.0)] (zip [1..] value
 
 --read the sqlValues from SQLite3 DB and convert to Haskell values
 
-readIntegerColumn :: [[SqlValue]] -> Integer -> [Integer]
+readIntegerColumn :: [[SqlValue]]  -> Integer -> [Integer]
 readIntegerColumn sqlResult index =
   map (\row -> fromSql $ genericIndex row index :: Integer) sqlResult
 
@@ -73,5 +73,5 @@ readStringColumn sqlResult index =
 safeConvertToDouble :: SqlValue -> Double
 safeConvertToDouble value =
   case value of
-    SqlDouble x -> x
-    _           -> 0.0
+    SqlDouble x  ->  x
+    _                    ->  0.0
