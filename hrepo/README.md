@@ -1,4 +1,4 @@
-contents
+Contents
 =========
 
 1. CreateDatabases : takes existing csv files and create sqlite databases.  
@@ -11,5 +11,5 @@ Usage
 
 The successful execution of CreateDatabases is required for the successful implementation  
 of the other modules. All execution commands are in curly braces in each module.
-Eventually, some of those will be used to build executable functions. For now simply copy and   
-paste the commands in your cli.  
+Eventually, some of those will be used to build executable functions.  
+For now simply copy and paste the commands in your cli.  
