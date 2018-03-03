@@ -13,6 +13,8 @@ import LoanSummary
 ["id INTEGER","loan_id TEXT","loan_type TEXT","amt_requested TEXT","loan_amt_usd REAL","loan_amt_ld REAL","rate REAL","interest_ld REAL","interest_usd REAL","duration_month REAL","status TEXT","take_out_dt TEXT","loan_plus_intr_ld REAL","loan_plus_intr_usd REAL"]
 --collections schema
 ["id INTEGER","loan_id TEXT","loan_plus_intr_usd REAL","loan_plus_intr_ld REAL","payment_dt TEXT","payment_amt_usd REAL","payment_amt_ld REAL"]
+--person schema
+["id INTEGER","first_name TEXT","last_name TEXT","middle_name TEXT","id_number TEXT","id_type TEXT","age REAL","gender TEXT","ph_numbers REAL","email TEXT"]
 
 ---LD loans
 sqlLDloanRecords <- queryDatabase "loans.sql" "SELECT id, loan_id, take_out_dt, rate, loan_amt_ld FROM loans WHERE status = 'approved' "
@@ -32,6 +34,12 @@ ldLoansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedCol
 ldLoansPaidOff = filter (\(_,y) -> y >= 0) $ idsActualColnMinusExpectedColn  ldLoansTotalCollections ldLoansExpectedCollections
 ldTotalOutstanding = (-1) * (sum $ map (\(_,b) -> b) ldLoansOutstanding )
 
+--collect user ID, loan ID, name, and amount owed
+ldUserIDsLoanIDs = nub $ map (\(a,b,_,_,_) -> (a, b)) validLDloanRecords
+ldUsersLoansAmts = findUserIDsForLoans ldLoansOutstanding ldUserIDsLoanIDs
+ldUsersToQuery = map (\(a, _, _) -> a) ldUsersLoansAmts
+ldUsersAndIDs <- getNamesForUserIDs ldUsersToQuery
+ldUserIDsNamesAmts = map (\((x,y,z),(a,b)) -> (x,y,z,a,b)) $ zip ldUsersAndIDs $ map (\(_,b,c) -> (b,c)) ldUsersLoansAmts
 
 --USD loans
 
@@ -58,9 +66,25 @@ totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
 totalOutstanding = totalExpectedCollections - totalCollection
 -}
 
+getNamesForUserIDs :: [Integer] -> IO [(Integer, String, String)]
+getNamesForUserIDs userIDs = do
+  let stringyIDs = map show userIDs
+  let query = "SELECT id, first_name, last_name FROM person WHERE id IN " ++ " (" ++ (intercalate ", " stringyIDs) ++ ")"
+  sqlQueryResult <- queryDatabase "person.sql" query
+  let queryResult = zip3 (readIntegerColumn sqlQueryResult 0) (readStringColumn sqlQueryResult 1) (readStringColumn sqlQueryResult 2)
+  return queryResult
+
+findUserIDsForLoans :: [(String, Double)] -> [(Integer, String)] -> [(Integer, String, Double)]
+findUserIDsForLoans outstandingLoans userIDsLoanIDs = map (\x -> findUserIDForLoan x userIDsLoanIDs) outstandingLoans
+
+findUserIDForLoan :: (String, Double) -> [(Integer, String)] -> (Integer, String, Double)
+findUserIDForLoan loanIDamtPair userIDsLoanIDs = userIDloanIDamtTriple
+  where
+    theUserID = fst $ head $ filter (\(_, b) -> b == fst loanIDamtPair) userIDsLoanIDs
+    userIDloanIDamtTriple = (theUserID, fst loanIDamtPair, snd loanIDamtPair)
+
 idCollections :: String -> [(String, Double)] -> [(String, [Double])]
 idCollections loanID idExpectedCollections  = [(loanID, map (\(_, b) -> b) $ filter (\(a, _) -> a == loanID) idExpectedCollections) ]
-
 
 idsCollections :: [String] -> [(String, Double)] -> [(String, [Double])]
 idsCollections ids idExpectedCollections = concatMap (\id -> idCollections id idExpectedCollections ) ids

@@ -19,6 +19,7 @@ convertCSVFiletoSQL "loans.csv" "loans.sql" "loans" ["id INTEGER","loan_id TEXT"
 
 --save the connections table in database
 convertCSVFiletoSQL "connections.csv" "connections.sql" "connections" ["id INTEGER","employment TEXT","employer_name TEXT","occupation TEXT","monthly_salary TEXT","mobile_type TEXT","marital_status TEXT","spouse_first_name TEXT","spouse_last_name TEXT","spouse_age TEXT","spouse_employement_status TEXT","home_address TEXT","business_address TEXT","employer_address TEXT","business_description TEXT","fb_acct TEXT","housing_type TEXT","rent_amt REAL","family_size TEXT","n_kids INTEGER","kids_sch_type TEXT","spouse_employed TEXT"]
+
 queryDatabase "connections.sql" "SELECT COUNT(*) FROM connections WHERE spouse_age > 24;"
 
 --save the person table into database
