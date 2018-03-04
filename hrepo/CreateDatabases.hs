@@ -1,7 +1,7 @@
 module CreateDatabases where
 
+import Text.CSV 
 import Data.List
-import Text.CSV
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3

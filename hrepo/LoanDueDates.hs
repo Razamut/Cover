@@ -1,12 +1,18 @@
+{-# LANGUAGE DeriveGeneric #-}
 module LoanDueDates where
 
-import Data.List
+import Data.Text    (Text)
+import GHC.Generics (Generic)
+import Data.Csv as DC
 import Text.CSV
+import Data.List
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
 import CreateDatabases
 import LoanSummary
+import qualified Data.ByteString.Lazy as BSL
+
 
 {-
 --loans schema
@@ -40,6 +46,8 @@ ldUsersLoansAmts = findUserIDsForLoans ldLoansOutstanding ldUserIDsLoanIDs
 ldUsersToQuery = map (\(a, _, _) -> a) ldUsersLoansAmts
 ldUsersAndIDs <- getNamesForUserIDs ldUsersToQuery
 ldUserIDsNamesAmts = map (\((x,y,z),(a,b)) -> (x,y,z,a,b)) $ zip ldUsersAndIDs $ map (\(_,b,c) -> (b,c)) ldUsersLoansAmts
+ldDebtors = map convertToPerson ldUserIDsNamesAmts
+
 
 --USD loans
 
@@ -64,7 +72,30 @@ xchangeRate  = 115 :: Double
 totalExpectedCollections = ldTotalExpectedCollections / xchangeRate + usdTotalExpectedCollections
 totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
 totalOutstanding = totalExpectedCollections - totalCollection
+
+--collect user ID, loan ID, name, and amount owed
+usdUserIDsLoanIDs = nub $ map (\(a,b,_,_,_) -> (a, b)) validUSDloanRecords
+usdUsersLoansAmts = findUserIDsForLoans usdLoansOutstanding usdUserIDsLoanIDs
+usdUsersToQuery = map (\(a, _, _) -> a) usdUsersLoansAmts
+usdUsersAndIDs <- getNamesForUserIDs usdUsersToQuery
+usdUserIDsNamesAmts = map (\((x,y,z),(a,b)) -> (x,y,z,a,b)) $ zip usdUsersAndIDs $ map (\(_,b,c) -> (b,c)) usdUsersLoansAmts
+usdDebtors = map convertToPerson usdUserIDsNamesAmts
+
 -}
+
+data Person = Person { id :: Integer, first_name :: String , last_name :: String,
+    loan_id :: String, owed :: Double }
+    deriving (Generic, Show)
+
+instance FromNamedRecord Person
+instance ToNamedRecord Person
+instance DefaultOrdered Person
+
+convertToPerson :: (Integer, String, String, String, Double) -> Person
+convertToPerson (a, b, c, d, e) = Person a b c d e
+
+saveRecordsToCSV :: String -> [Person] -> IO ()
+saveRecordsToCSV fileName persons = BSL.writeFile fileName $ encodeDefaultOrderedByName persons
 
 getNamesForUserIDs :: [Integer] -> IO [(Integer, String, String)]
 getNamesForUserIDs userIDs = do
