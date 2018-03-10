@@ -89,20 +89,18 @@ getExpectedCollection' records = totalExpectedCollections
     loanTypeExpectedCollections = map (\(a, b, c) -> (a, c + b / 100.0 * c)) records
     totalExpectedCollections = sum $ map (\(_, b) -> b) loanTypeExpectedCollections
 
-getExpectedCollection :: String -> IO ()
+getExpectedCollection :: String -> IO (Either String Double)
 getExpectedCollection loanType = do
   loanRecords <- getLoanRecords "loans.sql" loanType
   case loanRecords of
-    Right records -> putStrLn $ "expected collection = " ++ show (getExpectedCollection' records)
-    Left err -> putStrLn err
+    Right records -> return $ Right (getExpectedCollection' records)
+    Left err -> return $ Left err
 
 getTotalExpectedCollection :: Double -> IO Double
 getTotalExpectedCollection exchangeRate = do
-  ldLoanRecords <- getLoanRecords "loans.sql" "LD"
-  usdLoanRecords <- getLoanRecords "loans.sql" "USD"
-  let ldExpectedCollection = getExpectedCollection' $ (\(Right x) -> x) ldLoanRecords
-  let usdExpectedCollection = getExpectedCollection' $ (\(Right x) -> x) usdLoanRecords
-  let totalExpected = ldExpectedCollection / exchangeRate + usdExpectedCollection
+  ldExpectedCollection <- getExpectedCollection "LD"
+  usdExpectedCollection <- getExpectedCollection "USD"
+  let totalExpected = ( ((\(Right x) -> x) ldExpectedCollection) / exchangeRate  ) + ( (\(Right x) -> x) usdExpectedCollection )
   return totalExpected
 
 getTotalCollectionRecords :: Double -> IO (Double, Double, Double)
@@ -123,9 +121,15 @@ main = do
   totalDisbursed <- getTotalDisbursed 115.0
   putStrLn $ "Total (LD + USD) Disbursed Loans = " ++ show totalDisbursed
   putStrLn "LD Expected Collections:"
-  getExpectedCollection "LD"
+  ldExpected <- getExpectedCollection "LD"
+  case ldExpected of
+    Right value -> putStrLn $ "expected collection = " ++ show value
+    Left err -> putStrLn err
   putStrLn "USD Expected Collections:"
-  getExpectedCollection "USD"
+  usdExpected <- getExpectedCollection "USD"
+  case usdExpected of
+    Right value -> putStrLn $ "expected collection = " ++ show value
+    Left err -> putStrLn err
   totalExpected <- getTotalExpectedCollection 115.0
   putStrLn $ "total expected collection = " ++ show totalExpected
   collectionRecord <- getTotalCollectionRecords 115.0
