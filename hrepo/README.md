@@ -8,8 +8,9 @@ the rest of the modules require the sqlite databases.
 
 Usage
 =====
+Each of the above module is implemented through its main function.  
+The LoanDueDates module will create two files on your local system when executed.
 
-The successful execution of CreateDatabases is required for the successful implementation  
-of the other modules. All execution commands are in curly braces in each module.
-Eventually, some of those will be used to build executable functions.  
-For now simply copy and paste the commands in your cli.  
+TODO
+=====
+Need to compute loan due dates and amount due for next due date.
