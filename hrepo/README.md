@@ -2,7 +2,7 @@ Contents
 =========
 
 1. CreateDatabases : takes existing csv files and create sqlite databases.  
-the rest of the modules require the sqlite databases.
+   the rest of the modules require the sqlite databases.
 2. LoanSummary : reports high level summary of loans  
 3. LoanDueDates : will compute outstanding loans and due dates
 
