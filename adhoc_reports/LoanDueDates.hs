@@ -39,11 +39,11 @@ getColnRecordsFromQuery dbName query = do
 getColnRecords :: String -> String -> IO ( Either String [(String, Double)] )
 getColnRecords dbName loanType = case map toLower loanType of
   "ld" -> do
-            let query = "SELECT loan_id, payment_amt_ld FROM collections WHERE payment_amt_ld > 0"
+            let query = "SELECT loan_id, payment_amt_ld FROM collections WHERE CAST(payment_amt_ld AS DOUBLE) > 0.0"
             records <- getColnRecordsFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE payment_amt_usd > 0"
+             let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE CAST(payment_amt_usd AS DOUBLE) > 0.0"
              records <- getColnRecordsFromQuery dbName query
              return $ Right records
   _   -> do
@@ -59,11 +59,11 @@ getLoanRecordsFromQuery dbName query = do
 getLoanRecords :: String -> String -> IO ( Either String [(Integer, String, String, Double, Double)] )
 getLoanRecords dbName loanType = case map toLower loanType of
   "ld" -> do
-            let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND loan_amt_ld > 0"
+            let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND CAST(loan_amt_ld AS DOUBLE) > 0.0"
             records <- getLoanRecordsFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND loan_amt_usd > 0"
+             let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND CAST(loan_amt_usd AS DOUBLE) > 0.0"
              records <- getLoanRecordsFromQuery dbName query
              return $ Right records
   _   -> do
@@ -94,7 +94,7 @@ convertToPerson (a, b, c, d, e) = Person a b c d e
 getNamesForUserIDs :: [Integer] -> IO [(Integer, String, String)]
 getNamesForUserIDs userIDs = do
   let stringyIDs = map show userIDs
-  let query = "SELECT id, first_name, last_name FROM person WHERE id IN " ++ " (" ++ (intercalate ", " stringyIDs) ++ ")"
+      query = "SELECT id, first_name, last_name FROM person WHERE id IN " ++ " (" ++ (intercalate ", " stringyIDs) ++ ")"
   sqlQueryResult <- queryDatabase "person.sql" query
   let queryResult = zip3 (readIntegerColumn sqlQueryResult 0) (readStringColumn sqlQueryResult 1) (readStringColumn sqlQueryResult 2)
   return queryResult
@@ -137,16 +137,16 @@ getDebtors loanType = do
       case collectionRecords of
         Right colnRecs -> do
           let loansExpectedCollections = map (\(_,a,_,b,c) -> (a, c + (b/100.0) * c)  ) loanRecs
-          let loanIDs = nub $ map (\(x,_) -> x ) colnRecs
-          let loansCollections = idsCollections loanIDs colnRecs
-          let loansTotalCollections = map (\(a, b) -> (a, sum b)) loansCollections
-          let loansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedColn  loansTotalCollections loansExpectedCollections
-          let userIDsLoanIDs = nub $ map (\(a,b,_,_,_) -> (a, b)) loanRecs
-          let usersLoansAmts = findUserIDsForLoans loansOutstanding userIDsLoanIDs
-          let usersToQuery = map (\(a, _, _) -> a) usersLoansAmts
+              loanIDs = nub $ map (\(x,_) -> x ) colnRecs
+              loansCollections = idsCollections loanIDs colnRecs
+              loansTotalCollections = map (\(a, b) -> (a, sum b)) loansCollections
+              loansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedColn  loansTotalCollections loansExpectedCollections
+              userIDsLoanIDs = nub $ map (\(a,b,_,_,_) -> (a, b)) loanRecs
+              usersLoansAmts = findUserIDsForLoans loansOutstanding userIDsLoanIDs
+              usersToQuery = map (\(a, _, _) -> a) usersLoansAmts
           usersAndIDs <- getNamesForUserIDs usersToQuery
           let debtorsRecs = fromMaybe [] $ getDebtorsRecords $ combineTuplesFromLists usersAndIDs usersLoansAmts
-          let debtors = map convertToPerson debtorsRecs
+              debtors = map convertToPerson debtorsRecs
           return $ Right debtors
         Left err -> return $ Left err
     Left err -> return $ Left err
