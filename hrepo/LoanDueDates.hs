@@ -43,7 +43,7 @@ getColnRecords dbName loanType = case map toLower loanType of
             records <- getColnRecordsFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE typeof(payment_amt_ld)=\"real\" AND payment_amt_usd > 0"
+             let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE typeof(payment_amt_usd)=\"real\" AND payment_amt_usd > 0"
              records <- getColnRecordsFromQuery dbName query
              return $ Right records
   _   -> do
