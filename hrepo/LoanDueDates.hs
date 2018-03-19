@@ -39,11 +39,11 @@ getColnRecordsFromQuery dbName query = do
 getColnRecords :: String -> String -> IO ( Either String [(String, Double)] )
 getColnRecords dbName loanType = case map toLower loanType of
   "ld" -> do
-            let query = "SELECT loan_id, payment_amt_ld FROM collections WHERE payment_amt_ld > 0"
+            let query = "SELECT loan_id, payment_amt_ld FROM collections WHERE CAST(payment_amt_ld  AS DOUBLE) > 0"            
             records <- getColnRecordsFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE payment_amt_usd > 0"
+             let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE CAST( payment_amt_usd AS DOUBLE) > 0"
              records <- getColnRecordsFromQuery dbName query
              return $ Right records
   _   -> do
