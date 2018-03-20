@@ -14,6 +14,9 @@ import Database.HDBC.Sqlite3
 import CreateDatabases (queryDatabase)
 import LoanSummary (readIntegerColumn, readStringColumn, readDoubleColumn)
 import qualified Data.ByteString.Lazy as BSL
+import Data.Time
+import Data.Time.Clock
+import Data.Time.Calendar
 
 
 {-
@@ -32,6 +35,12 @@ getExpectedColnRecords  loanRecords = case loanRecords of
   Right records -> Right $ map (\(_,a,_,b,c) -> (a, c + (b/100.0) * c)  ) records
   Left err -> Left err
 
+getNumberOfDaysSince :: String -> IO(Integer)
+getNumberOfDaysSince date = do
+  today <- getCurrentTime
+  let now = utctDay today
+  let prev = parseTimeOrError True defaultTimeLocale "%Y-%-m-%-d" date :: Day
+  return $ diffDays now prev
 
 getColnRecordsWithDatesFromQuery :: String -> String -> IO [(String, Double, String)]
 getColnRecordsWithDatesFromQuery dbName query = do
@@ -51,6 +60,7 @@ getColnRecordsWithDates dbName loanType = case map toLower loanType of
              return $ Right records
   _   -> do
            return $ Left "Provide a valid loan type. Valid loan types are LD or USD."
+
 
 
 getLoanRecordsFromQuery :: String -> String -> IO [(Integer, String, String, Double, Double)]
