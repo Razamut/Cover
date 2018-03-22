@@ -107,7 +107,7 @@ combineTuplesWithDates (a, b, c) (x,y,z,v,w) | a == x = Just (a,b,c,y,z,v,w)
 
 
 data PersonWithDates = PersonWithDates { id :: Integer, first_name :: String , last_name :: String,
-    loan_id :: String, owed :: Double, loan_received :: String, last_payment :: String, days_last_payment :: Integer, in_default :: String}
+    loan_id :: String, owed :: Double, loan_received :: String, last_payment :: String, days_last_payment :: Integer, loan_type :: String, in_default :: String}
     deriving (Generic, Show)
 
 instance FromNamedRecord PersonWithDates
@@ -121,7 +121,7 @@ checkDefault lt days
   | otherwise = "GOOD"
 
 convertToPersonWithDates :: Day -> [(String, String)] -> (Integer, String, String, String, Double, String, String) -> PersonWithDates
-convertToPersonWithDates today loanidstype (a, b, c, id, e, f, g) = PersonWithDates a b c id e f g daysLastPayment inDefault
+convertToPersonWithDates today loanidstype (a, b, c, id, e, f, g) = PersonWithDates a b c id e f g daysLastPayment loantype inDefault
   where
     daysLastPayment = getDiffDays g today
     loantype = snd $ head $ filter (\(x, _) -> x==id) loanidstype
