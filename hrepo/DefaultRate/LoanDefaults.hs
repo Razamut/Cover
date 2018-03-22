@@ -28,19 +28,29 @@ import Data.Time.Calendar
 ["id INTEGER","first_name TEXT","last_name TEXT","middle_name TEXT","id_number TEXT","id_type TEXT","age REAL","gender TEXT","ph_numbers REAL","email TEXT"]
 -}
 
+defaultDaysB :: Integer
+defaultDaysB = 180
 
+defaultDaysP :: Integer
+defaultDaysP = 90
 
 getExpectedColnRecords :: Either String [(Integer, String, String, Double, Double)] -> Either String [(String, Double)]
 getExpectedColnRecords  loanRecords = case loanRecords of
   Right records -> Right $ map (\(_,a,_,b,c) -> (a, c + (b/100.0) * c)  ) records
   Left err -> Left err
 
-getNumberOfDaysSince :: String -> IO(Integer)
-getNumberOfDaysSince date = do
+getNumberOfDaysSinceToday :: String -> IO(Integer)
+getNumberOfDaysSinceToday date = do
   today <- getCurrentTime
   let now = utctDay today
   let prev = parseTimeOrError True defaultTimeLocale "%Y-%-m-%-d" date :: Day
   return $ diffDays now prev
+
+getDiffDays :: String -> Day -> Integer
+getDiffDays sday1 day2 = numdays
+  where
+    day1 = parseTimeOrError True defaultTimeLocale "%Y-%-m-%-d" sday1 :: Day
+    numdays = diffDays day2 day1
 
 getColnRecordsWithDatesFromQuery :: String -> String -> IO [(String, Double, String)]
 getColnRecordsWithDatesFromQuery dbName query = do
@@ -63,20 +73,20 @@ getColnRecordsWithDates dbName loanType = case map toLower loanType of
 
 
 
-getLoanRecordsFromQuery :: String -> String -> IO [(Integer, String, String, Double, Double)]
+getLoanRecordsFromQuery :: String -> String -> IO [(Integer, String, String, String, Double, Double)]
 getLoanRecordsFromQuery dbName query = do
   sqlLoanRecords <- queryDatabase dbName query
-  let loanRecords = zip5 (readIntegerColumn sqlLoanRecords 0) (readStringColumn sqlLoanRecords 1) (readStringColumn sqlLoanRecords 2) (readDoubleColumn sqlLoanRecords 3) (readDoubleColumn sqlLoanRecords 4)
+  let loanRecords = zip6 (readIntegerColumn sqlLoanRecords 0) (readStringColumn sqlLoanRecords 1) (readStringColumn sqlLoanRecords 2) (readStringColumn sqlLoanRecords 3) (readDoubleColumn sqlLoanRecords 4) (readDoubleColumn sqlLoanRecords 5)
   return loanRecords
 
-getLoanRecords :: String -> String -> IO ( Either String [(Integer, String, String, Double, Double)] )
+getLoanRecords :: String -> String -> IO ( Either String [(Integer, String, String, String, Double, Double)] )
 getLoanRecords dbName loanType = case map toLower loanType of
   "ld" -> do
-            let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND loan_amt_ld > 0"
+            let query = "SELECT id, loan_id, take_out_dt, loan_type, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND loan_amt_ld > 0"
             records <- getLoanRecordsFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND loan_amt_usd > 0"
+             let query = "SELECT id, loan_id, take_out_dt, loan_type, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND loan_amt_usd > 0"
              records <- getLoanRecordsFromQuery dbName query
              return $ Right records
   _   -> do
@@ -85,6 +95,8 @@ getLoanRecords dbName loanType = case map toLower loanType of
 
 getDebtorsRecordsWithDates :: [Maybe (Integer, String, String, String, Double, String, String)] -> Maybe [(Integer, String, String, String, Double, String, String)]
 getDebtorsRecordsWithDates ys = sequenceA $ filter (\x -> x /= Nothing) ys
+
+
 
 combineTuplesFromListsWithDates :: [(Integer, String, String)] -> [(Integer, String, Double, String, String)] -> [Maybe (Integer, String, String, String, Double, String, String)]
 combineTuplesFromListsWithDates xs ys = nub $ [combineTuplesWithDates x y | x <- xs, y <- ys]
@@ -95,15 +107,26 @@ combineTuplesWithDates (a, b, c) (x,y,z,v,w) | a == x = Just (a,b,c,y,z,v,w)
 
 
 data PersonWithDates = PersonWithDates { id :: Integer, first_name :: String , last_name :: String,
-    loan_id :: String, owed :: Double, loan_received :: String, last_payment :: String }
+    loan_id :: String, owed :: Double, loan_received :: String, last_payment :: String, days_last_payment :: Integer, in_default :: String}
     deriving (Generic, Show)
 
 instance FromNamedRecord PersonWithDates
 instance ToNamedRecord PersonWithDates
 instance DefaultOrdered PersonWithDates
 
-convertToPersonWithDates :: (Integer, String, String, String, Double, String, String) -> PersonWithDates
-convertToPersonWithDates (a, b, c, d, e, f, g) = PersonWithDates a b c d e f g
+checkDefault :: String -> Integer -> String
+checkDefault lt days
+  | lt == "b" && days >= defaultDaysB = "DEFAULTED"
+  | lt == "p" && days >= defaultDaysP = "DEFAULTED"
+  | otherwise = "GOOD"
+
+convertToPersonWithDates :: Day -> [(String, String)] -> (Integer, String, String, String, Double, String, String) -> PersonWithDates
+convertToPersonWithDates today loanidstype (a, b, c, id, e, f, g) = PersonWithDates a b c id e f g daysLastPayment inDefault
+  where
+    daysLastPayment = getDiffDays g today
+    loantype = snd $ head $ filter (\(x, _) -> x==id) loanidstype
+    inDefault = checkDefault loantype daysLastPayment 
+    
 
 getNamesForUserIDs :: [Integer] -> IO [(Integer, String, String)]
 getNamesForUserIDs userIDs = do
@@ -149,7 +172,7 @@ idActualColnMinusExpectedColnWithDates id actuals expectations = [(id, actual - 
     expectation = second $ head $ filter (\(a,_,_) -> a == id) expectations
     loanreceived = third $ head $ filter (\(a,_,_) -> a == id) expectations
     lastpaymentdate = case filter (\(a,_,_) -> a == id) actuals of
-                [] -> "No Payments Recieved"
+                [] -> loanreceived
                 x:xs -> third $ head $ filter (\(a,_,_) -> a == id) actuals
 
 idsActualColnMinusExpectedColnWithDates :: [(String, Double, String)] -> [(String, Double, String)] -> [(String, Double, String, String)]
@@ -167,17 +190,22 @@ getDefaulters loanType = do
     Right loanRecs -> do
       case collectionRecords of
         Right colnRecs -> do
-          let loansExpectedCollectionsWithDates = map (\(_,a,d,b,c) -> (a, c + (b/100.0) * c, d)  ) loanRecs
+          let loansExpectedCollectionsWithDates = map (\(_,a,d,_,b,c) -> (a, c + (b/100.0) * c, d)  ) loanRecs
           let loanIDs = nub $ map (\(x,_,_) -> x ) colnRecs
           let loansCollectionsWithDates = idsCollectionsWithDates loanIDs colnRecs
           let loansTotalCollectionsWithDates = map (\(a, b, c) -> (a, sum b, maximum c)) loansCollectionsWithDates
           let loansOutstandingWithDates = filter  (\(_, y, _,_) -> y < 0) $  idsActualColnMinusExpectedColnWithDates  loansTotalCollectionsWithDates loansExpectedCollectionsWithDates
-          let userIDsLoanIDs = nub $ map (\(a,b,_,_,_) -> (a, b)) loanRecs
+          let userIDsLoanIDs = nub $ map (\(a,b,_,_,_,_) -> (a, b)) loanRecs
           let usersLoansAmtsWithDates = findUserIDsForLoansWithDates loansOutstandingWithDates userIDsLoanIDs
           let usersToQuery = map (\(a, _, _,_,_) -> a) usersLoansAmtsWithDates
           usersAndIDs <- getNamesForUserIDs usersToQuery
+          curday <- getCurrentTime
+          let today = utctDay curday
           let debtorsRecs = fromMaybe [] $ getDebtorsRecordsWithDates $ combineTuplesFromListsWithDates usersAndIDs usersLoansAmtsWithDates
-          let debtors = map convertToPersonWithDates debtorsRecs
+          let loanIdsloanTypes = map (\(_,id,_,lt,_,_) -> (id, lt)) loanRecs
+          let debtors = map (convertToPersonWithDates today loanIdsloanTypes) debtorsRecs
+          
+          
           return $ Right debtors
         Left err -> return $ Left err
     Left err -> return $ Left err
