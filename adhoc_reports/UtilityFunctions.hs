@@ -2,11 +2,34 @@ module UtilityFunctions where
 
 import Data.Dates
 import Data.Char (toLower)
-import Data.List 
+import Data.List
 import Database.HDBC
 import Database.HDBC.Sqlite3
-import CreateDatabases (queryDatabase)
-import LoanSummary (readIntegerColumn, readStringColumn, readDoubleColumn)
+
+queryDatabase :: FilePath -> String -> IO [[SqlValue]]
+queryDatabase databaseFile sqlQuery = do
+  conn <- connectSqlite3 databaseFile
+  result <- quickQuery' conn sqlQuery []
+  disconnect conn
+  return result
+
+readIntegerColumn :: [[SqlValue]]  -> Integer -> [Integer]
+readIntegerColumn sqlResult index =
+  map (\row -> fromSql $ genericIndex row index :: Integer) sqlResult
+
+readDoubleColumn :: [[SqlValue]] -> Integer -> [Double]
+readDoubleColumn sqlResult index =
+  map (\row -> safeConvertToDouble $ genericIndex row index) sqlResult
+
+readStringColumn :: [[SqlValue]] -> Integer -> [String]
+readStringColumn sqlResult index =
+  map (\row -> fromSql $ genericIndex row index :: String) sqlResult
+
+safeConvertToDouble :: SqlValue -> Double
+safeConvertToDouble value =
+  case value of
+    SqlDouble x  ->  x
+    _            ->  0.0
 
 getDateTimeFromString :: String -> (Int, Int, Int, Int, Int, Int)
 getDateTimeFromString xs = (year, month, day, hour, minute, second)

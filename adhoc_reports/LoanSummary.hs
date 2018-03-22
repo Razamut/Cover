@@ -6,7 +6,7 @@ import Text.CSV
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
-import CreateDatabases (queryDatabase)
+import UtilityFunctions (queryDatabase, readDoubleColumn, readStringColumn, readIntegerColumn)
 
 {-
 --loans schema
@@ -15,25 +15,6 @@ import CreateDatabases (queryDatabase)
 ["id INTEGER","loan_id TEXT","loan_plus_intr_usd REAL","loan_plus_intr_ld REAL","payment_dt TEXT","payment_amt_usd REAL","payment_amt_ld REAL"]
 plotList [PNG "gnu_line.png", Title "line", YRange (0.0, 20.0)] (zip [1..] values)
 -}
-
---read the sqlValues from SQLite3 DB and convert to Haskell values
-readIntegerColumn :: [[SqlValue]]  -> Integer -> [Integer]
-readIntegerColumn sqlResult index =
-  map (\row -> fromSql $ genericIndex row index :: Integer) sqlResult
-
-readDoubleColumn :: [[SqlValue]] -> Integer -> [Double]
-readDoubleColumn sqlResult index =
-  map (\row -> safeConvertToDouble $ genericIndex row index) sqlResult
-
-readStringColumn :: [[SqlValue]] -> Integer -> [String]
-readStringColumn sqlResult index =
-  map (\row -> fromSql $ genericIndex row index :: String) sqlResult
-
-safeConvertToDouble :: SqlValue -> Double
-safeConvertToDouble value =
-  case value of
-    SqlDouble x  ->  x
-    _            ->  0.0
 
 getLoanRecordsFromQuery :: String -> String -> IO [(String, Double, Double)]
 getLoanRecordsFromQuery dbName query = do

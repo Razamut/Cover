@@ -11,6 +11,9 @@ Usage
 Each of the above module is implemented through its main function.  
 The LoanDueDates module will create two files on your local system when executed.
 
-TODO
-=====
-Need to compute loan due dates and amount due for next due date.
+Running:
+=======
+To execute the LoanDueDates module in terminal do
+$ runhaskell LoanDueDates <loanType1 [,loanType2]>
+
+where loanTypen is either LD or USD 

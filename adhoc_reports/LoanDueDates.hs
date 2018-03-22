@@ -2,7 +2,7 @@
 module LoanDueDates where
 
 import Data.Dates
-import Data.Text    (Text)
+import Data.Text (Text)
 import GHC.Generics (Generic)
 import Data.Csv as DC hiding (lookup)
 import Data.Maybe (fromMaybe)
@@ -12,11 +12,13 @@ import Data.Char (toLower)
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
-import CreateDatabases (queryDatabase)
-import LoanSummary (readIntegerColumn, readStringColumn, readDoubleColumn)
+import System.Environment (getArgs)
 import qualified Data.ByteString.Lazy as BSL
-import UtilityFunctions
-
+import UtilityFunctions (queryDatabase, readIntegerColumn, readStringColumn,
+    readDoubleColumn, addMonthsToDateTime, computeMonthsToAdd, convertStringToDateTime,
+    combineTuplesFromLists,getDebtorsRecords, getNamesForUserIDs, findUserIDsForLoans,
+    idsActualColnMinusExpectedColn,idsCollections, nextDueAmt, getColnRecords,
+    getLoanRecords)
 
 {-
 --loans schema
@@ -37,7 +39,6 @@ instance DefaultOrdered Person
 
 convertToPerson :: (Integer, String, String, String, String, Double, String, Double) -> Person
 convertToPerson (a, b, c, d, e, f, g, h) = Person a b c d e f g h
-
 
 getDebtors :: String -> IO (Either String [Person])
 getDebtors loanType = do
@@ -65,7 +66,7 @@ getDebtors loanType = do
               numberOfMonthsToAdd = map computeMonthsToAdd takeOutDates
           listOfMaybeDueDates <- sequenceA $ zipWith addMonthsToDateTime numberOfMonthsToAdd takeOutDates
           defaultDate <- getCurrentDateTime
-          let dueDates = map (\dt -> fst $ break (==',') $ show $ fromMaybe defaultDate dt) listOfMaybeDueDates 
+          let dueDates = map (\dt -> fst $ break (==',') $ show $ fromMaybe defaultDate dt) listOfMaybeDueDates
               debtorsWithDueDates :: [(Integer, String, String, String, String, Double, String)]
               debtorsWithDueDates = zipWith (\(a, b, c, d, e, f) x -> (a, b, c, d, e, f, x) ) debtorsRecs dueDates
               dueAmts = map (\(a, b, c, d, e, f, x) -> fromMaybe 0.0 $ lookup d loansNextExpectedPayment) debtorsWithDueDates
@@ -79,17 +80,16 @@ getDebtors loanType = do
 saveDebtorsRecordsToCSV :: String -> [Person] -> IO ()
 saveDebtorsRecordsToCSV fileName persons = BSL.writeFile fileName $ encodeDefaultOrderedByName persons
 
+runGetDebtors :: [String] -> IO ()
+runGetDebtors [] = return ()
+runGetDebtors (x:xs) = do
+  debtors <- getDebtors x
+  case debtors of
+    Right records -> do
+      saveDebtorsRecordsToCSV (x ++ "_debtors.csv") records
+      putStrLn $ "created " ++ x ++ "_debtors.csv file"
+    Left err -> putStrLn err
+  runGetDebtors xs
+
 main :: IO ()
-main = do
-  usdDebtors <- getDebtors "USD"
-  case usdDebtors of
-    Right usdDebts -> do
-      saveDebtorsRecordsToCSV "usd_debtors.csv" usdDebts
-      putStrLn "created usd_debtors.csv file"
-    Left err -> putStrLn err
-  ldDebtors <- getDebtors "LD"
-  case ldDebtors of
-    Right ldDebts -> do
-      saveDebtorsRecordsToCSV "ld_debtors.csv" ldDebts
-      putStrLn "created ld_debtors.csv file"
-    Left err -> putStrLn err
+main = getArgs >>= runGetDebtors
