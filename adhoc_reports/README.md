@@ -16,4 +16,4 @@ Running:
 To execute the LoanDueDates module in terminal do  
 $ runhaskell LoanDueDates <loanType1 [,loanType2]>
 
-where loanTypen is either LD or USD
+where loanTypeN is either LD or USD
