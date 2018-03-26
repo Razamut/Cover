@@ -204,6 +204,11 @@ getDefaulters loanType = do
           let debtorsRecs = fromMaybe [] $ getDebtorsRecordsWithDates $ combineTuplesFromListsWithDates usersAndIDs usersLoansAmtsWithDates
           let loanIdsloanTypes = map (\(_,id,_,lt,_,_) -> (id, lt)) loanRecs
           let debtors = map (convertToPersonWithDates today loanIdsloanTypes) debtorsRecs
+          let numLoans = fromInteger (genericLength loanIDs)
+          let numDefaults = fromInteger $ genericLength $ filter (\(PersonWithDates{in_default=d}) -> d == "DEFAULTED") debtors
+          putStrLn $ "The percentage of defaulted " ++ loanType ++ " loans: " ++ (show $ 100*numDefaults/numLoans)
+          putStrLn $ "The number of " ++ loanType ++ " loans are: " ++ show numLoans
+          putStrLn $ "The number of " ++ loanType ++ " defaulted loans are: " ++ show numDefaults
           
           
           return $ Right debtors
@@ -213,17 +218,39 @@ getDefaulters loanType = do
 saveRecordsToCSV :: String -> [PersonWithDates] -> IO ()
 saveRecordsToCSV fileName persons = BSL.writeFile fileName $ encodeDefaultOrderedByName persons
 
+getCollectionsChooseDefault :: String -> PersonWithDates -> Double
+getCollectionsChooseDefault defaulted (PersonWithDates{owed = a, in_default=b}) 
+  | b == defaulted = a
+  | otherwise = 0.0
+
 main :: IO ()
 main = do
   usdDefaulters <- getDefaulters "USD"
   case usdDefaulters of
     Right usdDebts -> do
       saveRecordsToCSV "usd_defaulters.csv" usdDebts
+      let goodCollects = map (getCollectionsChooseDefault "GOOD") usdDebts
+      putStrLn $ show (sum goodCollects)
       putStrLn "created usd_defaulters.csv file"
     Left err -> putStrLn err
   ldDefaulters <- getDefaulters "LD"
   case ldDefaulters of
     Right ldDebts -> do
       saveRecordsToCSV "ld_defaulters.csv" ldDebts
+      let goodCollects = map (getCollectionsChooseDefault "GOOD") ldDebts
+      putStrLn $ show $ (sum goodCollects) / 115.0
       putStrLn "created ld_defaulters.csv file"
     Left err -> putStrLn err
+
+  case usdDefaulters of
+    Right usdDebts -> do
+      case ldDefaulters of
+        Right ldDebts -> do
+          let numDefaultsUSD = fromInteger $ genericLength $ filter (\(PersonWithDates{in_default=d}) -> d == "DEFAULTED") usdDebts
+          let numDefaultsLD = fromInteger $ genericLength $ filter (\(PersonWithDates{in_default=d}) -> d == "DEFAULTED") ldDebts
+          let query = "SELECT id, loan_id, take_out_dt, loan_type, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND loan_amt_ld > 0"
+          records <- getLoanRecordsFromQuery "loans.sql" query
+          let numLoansAll = fromInteger $ genericLength records
+          putStrLn $ "The percentage of defaulted loans: " ++ (show $ 100*(numDefaultsUSD+numDefaultsLD)/numLoansAll)
+          putStrLn $ "The number of loans are: " ++ show numLoansAll
+          putStrLn $ "The number of defaulted loans are: " ++ show (numDefaultsUSD + numDefaultsLD)
