@@ -65,7 +65,7 @@ getColnRecordsWithDates dbName loanType = case map toLower loanType of
             records <- getColnRecordsWithDatesFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT loan_id, payment_amt_usd, payment_dt FROM collections WHERE CAST(payment_amt_ld  AS DOUBLE) > 0"
+             let query = "SELECT loan_id, payment_amt_usd, payment_dt FROM collections WHERE CAST(payment_amt_usd  AS DOUBLE) > 0"
              records <- getColnRecordsWithDatesFromQuery dbName query
              return $ Right records
   _   -> do
@@ -230,7 +230,7 @@ main = do
     Right usdDebts -> do
       saveRecordsToCSV "usd_defaulters.csv" usdDebts
       let goodCollects = map (getCollectionsChooseDefault "GOOD") usdDebts
-      putStrLn $ show (sum goodCollects)
+      putStrLn $ "The amount of usd loans owed which are not defaulted: $" ++ show (-(sum goodCollects))
       putStrLn "created usd_defaulters.csv file"
     Left err -> putStrLn err
   ldDefaulters <- getDefaulters "LD"
@@ -238,7 +238,7 @@ main = do
     Right ldDebts -> do
       saveRecordsToCSV "ld_defaulters.csv" ldDebts
       let goodCollects = map (getCollectionsChooseDefault "GOOD") ldDebts
-      putStrLn $ show $ (sum goodCollects) / 115.0
+      putStrLn $ "The amount of ld loans owed which are not defaulted: $" ++ show  (round ((-(sum goodCollects)) / 115.0))
       putStrLn "created ld_defaulters.csv file"
     Left err -> putStrLn err
 
