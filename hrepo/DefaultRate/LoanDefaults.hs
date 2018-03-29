@@ -61,11 +61,11 @@ getColnRecordsWithDatesFromQuery dbName query = do
 getColnRecordsWithDates :: String -> String -> IO ( Either String [(String, Double, String)] )
 getColnRecordsWithDates dbName loanType = case map toLower loanType of
   "ld" -> do
-            let query = "SELECT loan_id, payment_amt_ld, payment_dt FROM collections WHERE payment_amt_ld > 0 AND typeof(payment_amt_ld)=\"real\""
+            let query = "SELECT loan_id, payment_amt_ld, payment_dt FROM collections WHERE CAST(payment_amt_ld  AS DOUBLE) > 0"
             records <- getColnRecordsWithDatesFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT loan_id, payment_amt_usd, payment_dt FROM collections WHERE payment_amt_usd > 0 AND typeof(payment_amt_usd)=\"real\""
+             let query = "SELECT loan_id, payment_amt_usd, payment_dt FROM collections WHERE CAST(payment_amt_ld  AS DOUBLE) > 0"
              records <- getColnRecordsWithDatesFromQuery dbName query
              return $ Right records
   _   -> do
