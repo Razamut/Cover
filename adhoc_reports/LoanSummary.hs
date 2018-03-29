@@ -6,7 +6,7 @@ import Text.CSV
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
-import CreateDatabases (queryDatabase)
+import UtilityFunctions (queryDatabase, readDoubleColumn, readStringColumn, readIntegerColumn)
 
 {-
 --loans schema
@@ -15,25 +15,6 @@ import CreateDatabases (queryDatabase)
 ["id INTEGER","loan_id TEXT","loan_plus_intr_usd REAL","loan_plus_intr_ld REAL","payment_dt TEXT","payment_amt_usd REAL","payment_amt_ld REAL"]
 plotList [PNG "gnu_line.png", Title "line", YRange (0.0, 20.0)] (zip [1..] values)
 -}
-
---read the sqlValues from SQLite3 DB and convert to Haskell values
-readIntegerColumn :: [[SqlValue]]  -> Integer -> [Integer]
-readIntegerColumn sqlResult index =
-  map (\row -> fromSql $ genericIndex row index :: Integer) sqlResult
-
-readDoubleColumn :: [[SqlValue]] -> Integer -> [Double]
-readDoubleColumn sqlResult index =
-  map (\row -> safeConvertToDouble $ genericIndex row index) sqlResult
-
-readStringColumn :: [[SqlValue]] -> Integer -> [String]
-readStringColumn sqlResult index =
-  map (\row -> fromSql $ genericIndex row index :: String) sqlResult
-
-safeConvertToDouble :: SqlValue -> Double
-safeConvertToDouble value =
-  case value of
-    SqlDouble x  ->  x
-    _            ->  0.0
 
 getLoanRecordsFromQuery :: String -> String -> IO [(String, Double, Double)]
 getLoanRecordsFromQuery dbName query = do
@@ -44,11 +25,11 @@ getLoanRecordsFromQuery dbName query = do
 getLoanRecords :: String -> String -> IO ( Either String [(String, Double, Double)] )
 getLoanRecords dbName loanType = case map toLower loanType of
   "ld" -> do
-            let query = "SELECT loan_type, rate, loan_amt_ld FROM loans WHERE status = 'approved' "
+            let query = "SELECT loan_type, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND CAST(loan_amt_ld AS DOUBLE) > 0.0"
             records <- getLoanRecordsFromQuery dbName query
             return $ Right records
   "usd" -> do
-             let query = "SELECT loan_type, rate, loan_amt_usd FROM loans WHERE status = 'approved' "
+             let query = "SELECT loan_type, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND CAST(loan_amt_usd AS DOUBLE) > 0.0"
              records <- getLoanRecordsFromQuery dbName query
              return $ Right records
   _   -> do
@@ -80,7 +61,7 @@ getTotalDisbursed exchangeRate = do
   ldLoanRecords <- getLoanRecords "loans.sql" "LD"
   usdLoanRecords <- getLoanRecords "loans.sql" "USD"
   let usdTotalDisbursed = (\(a,_,_,_) -> a) $ getLoansDisbursed' $ (\(Right x) -> x) usdLoanRecords
-  let ldTotalDisbursed = (\(a,_,_,_) -> a) $ getLoansDisbursed' $ (\(Right x) -> x) ldLoanRecords
+      ldTotalDisbursed = (\(a,_,_,_) -> a) $ getLoansDisbursed' $ (\(Right x) -> x) ldLoanRecords
   return $ ldTotalDisbursed / exchangeRate + usdTotalDisbursed
 
 getExpectedCollection' :: [(String, Double, Double)] -> Double
@@ -105,11 +86,11 @@ getTotalExpectedCollection exchangeRate = do
 
 getTotalCollectionRecords :: Double -> IO (Double, Double, Double)
 getTotalCollectionRecords xchangeRate = do
-  sqlCollectionRecords <- queryDatabase "collections.sql" "SELECT payment_amt_ld, payment_amt_usd FROM collections"
+  sqlCollectionRecords <- queryDatabase "collections.sql" "SELECT payment_amt_ld, payment_amt_usd FROM collections WHERE CAST(payment_amt_ld AS DOUBLE) > 0.0 OR CAST(payment_amt_usd AS DOUBLE) > 0.0"
   let collectionRecords = zip (readDoubleColumn sqlCollectionRecords 0) (readDoubleColumn sqlCollectionRecords 1)
-  let ldTotalCollections = sum $ map (\(a,_) -> a) collectionRecords
-  let usdTotalCollections = sum $ map (\(_, b) -> b) collectionRecords
-  let totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
+      ldTotalCollections = sum $ map (\(a,_) -> a) collectionRecords
+      usdTotalCollections = sum $ map (\(_, b) -> b) collectionRecords
+      totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
   return (totalCollection, ldTotalCollections, usdTotalCollections)
 
 main :: IO ()
@@ -138,5 +119,5 @@ main = do
   putStrLn $ "USD collections = " ++ show ((\(_,_,c) -> c) collectionRecord)
   putStrLn "total outstanding : "
   let totalCollection = ((\(a,_,_) -> a) collectionRecord)
-  let totalOutstanding = totalExpected - totalCollection
+      totalOutstanding = totalExpected - totalCollection
   print $ totalOutstanding

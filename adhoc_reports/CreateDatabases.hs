@@ -5,12 +5,9 @@ import Data.List
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
+import UtilityFunctions (queryDatabase)
 
-{-
--- drop last column in collections table and store as database table
-either (\err -> ["error"]) (\csv -> head csv) eitherCSV
-queryDatabase "connections.sql" "SELECT COUNT(*) FROM connections WHERE spouse_age > 24;"
--}
+
 fieldsInCSVFile :: FilePath -> IO ([String])
 fieldsInCSVFile inFileName = do
   input <- readFile inFileName
@@ -34,7 +31,6 @@ dropLastColumnInCSVFile inFileName = do
 
 convertCSVFiletoSQL :: String -> String -> String -> [String] -> IO ()
 convertCSVFiletoSQL inFileName outFileName tableName fields = do
-  --open and read the CSV File
   input <- readFile inFileName
   let records = parseCSV inFileName input
   either handleCSVError convertTool records
@@ -70,13 +66,6 @@ convertCSVtoSQL tableName outFileName fields records =
                       tableName ++ " VALUES (" ++
                       intercalate ", " (replicate nfieldsInFile "?") ++ ")"
     sqlRecords = map (map toSql) records
-
-queryDatabase :: FilePath -> String -> IO [[SqlValue]]
-queryDatabase databaseFile sqlQuery = do
-  conn <- connectSqlite3 databaseFile
-  result <- quickQuery' conn sqlQuery []
-  disconnect conn
-  return result
 
 main :: IO ()
 main = do
