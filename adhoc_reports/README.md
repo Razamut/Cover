@@ -6,6 +6,16 @@ Contents
 2. LoanSummary : reports high level summary of loans  
 3. LoanDueDates : will compute outstanding loans and due dates
 
+Require Packages 
+=====
+(CABAL)
+cassava
+csv
+HDBC
+HDBC-sqlite3
+sqlite
+dates
+
 Usage
 =====
 Each of the above module is implemented through its main function.  
