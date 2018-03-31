@@ -11,8 +11,7 @@ import Data.Char (toLower)
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
-import CreateDatabases (queryDatabase)
-import LoanSummary (readIntegerColumn, readStringColumn, readDoubleColumn)
+import UtilityFunctions (queryDatabase, readIntegerColumn, readStringColumn, readDoubleColumn)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Time
 import Data.Time.Clock
