@@ -1,7 +1,7 @@
 module LoanSummary where
 
 import Data.List
-import Data.Char (toLower)
+import Data.Char (toLower, isSpace)
 import Text.CSV
 import Data.Either
 import Database.HDBC
@@ -35,14 +35,20 @@ getLoanRecords dbName loanType = case map toLower loanType of
   _   -> do
            return $ Left "Provide a valid loan type. Valid loan types are LD or USD."
 
+trim :: String -> String
+trim = dropWhileEnd isSpace . dropWhile isSpace
+
+lowerTrim :: String -> String
+lowerTrim = map toLower . trim
+
 getLoansDisbursed' :: [(String, Double, Double)] -> (Double, Double, Double, Double)
 getLoansDisbursed' records = (totalLoans, totalPersonalLoans, totalBusinessLoans, totalOtherLoans)
   where
     loanTypeAmt = map (\(a, _, c) -> (a, c)) records
     totalLoans = sum $ map (\(_, b) -> b) loanTypeAmt
-    totalPersonalLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> a == "p") loanTypeAmt
-    totalBusinessLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> a == "b") loanTypeAmt
-    totalOtherLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> and [a /= "p", a/="b"] ) loanTypeAmt
+    totalPersonalLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> lowerTrim a == "p") loanTypeAmt
+    totalBusinessLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> lowerTrim a == "b") loanTypeAmt
+    totalOtherLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> and [lowerTrim a /= "p", lowerTrim a /= "b"] ) loanTypeAmt
 
 getLoansDisbursed :: String -> IO ()
 getLoansDisbursed loanType = do
@@ -93,13 +99,16 @@ getTotalCollectionRecords xchangeRate = do
       totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
   return (totalCollection, ldTotalCollections, usdTotalCollections)
 
+xchangeRate :: Double
+xchangeRate = 115.0
+
 main :: IO ()
 main = do
   putStrLn "LD PORTFOLIO :"
   getLoansDisbursed "LD"
   putStrLn "USD PORTFOLIO :"
   getLoansDisbursed "USD"
-  totalDisbursed <- getTotalDisbursed 115.0
+  totalDisbursed <- getTotalDisbursed xchangeRate
   putStrLn $ "Total (LD + USD) Disbursed Loans = " ++ show totalDisbursed
   putStrLn "LD Expected Collections:"
   ldExpected <- getExpectedCollection "LD"
@@ -111,9 +120,9 @@ main = do
   case usdExpected of
     Right value -> putStrLn $ "expected collection = " ++ show value
     Left err -> putStrLn err
-  totalExpected <- getTotalExpectedCollection 115.0
+  totalExpected <- getTotalExpectedCollection xchangeRate
   putStrLn $ "total expected collection = " ++ show totalExpected
-  collectionRecord <- getTotalCollectionRecords 115.0
+  collectionRecord <- getTotalCollectionRecords xchangeRate
   putStrLn $ "total collection = " ++ show ((\(a,_,_) -> a) collectionRecord)
   putStrLn $ "LD collections = " ++ show ((\(_,b,_) -> b) collectionRecord)
   putStrLn $ "USD collections = " ++ show ((\(_,_,c) -> c) collectionRecord)
