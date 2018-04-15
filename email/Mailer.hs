@@ -57,10 +57,8 @@ sendEmail eFrom eTo filePath = do
     Nothing -> putStrLn "NoSesCredentialFound"
     Just cred -> do
       let
-        userName = user cred
-        passWord = pass cred
-        seAccessKey = C8.pack userName
-        seSecretKey = C8.pack passWord
+        seAccessKey = C8.pack $ user cred
+        seSecretKey = C8.pack $ pass cred
         seSessionToken = Nothing
         seRegion = usEast1
         seFrom = C8.pack eFrom
