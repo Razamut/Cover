@@ -33,10 +33,8 @@ getAttachment filePath = do
   case filePath of
     [] -> return Nothing
     (x:xs)  -> do
-      attachment <- filePart (T.pack "application/octet-stream") filePath
+      attachment <- filePart (T.pack "application/iron-coin") filePath
       return $ Just attachment
-
-email = "spziama@gmail.com"
 
 cc         = []
 bcc        = []
@@ -45,7 +43,6 @@ body = S.plainTextPart $ L.pack ("Hello,\n" ++ "\n" ++
   "Please find report attached.\n" ++ "\n" ++
   "Sincerely, \n" ++ "Data Science Team")
 html = S.htmlPart L.empty
-filePath = "example.csv"
 
 sendEmail :: String -> [String] -> FilePath -> IO ()
 sendEmail eFrom eTo filePath = do
@@ -74,6 +71,7 @@ sendEmail eFrom eTo filePath = do
         Just file -> do
           let sMail = S.simpleMail aFrom aTo  cc bcc subject [html, body, file]
           renderSendMailSES manager ses sMail
+
 safeHead :: [String] -> String
 safeHead [] = []
 safeHead (x:_) = x
