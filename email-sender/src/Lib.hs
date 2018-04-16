@@ -1,4 +1,6 @@
-module Mail where
+module Lib
+    ( sendEmail, safeHead
+    ) where
 
 import Data.Aeson
 import Control.Applicative
@@ -6,7 +8,6 @@ import Network.Mail.Mime.SES
 import Network.Mail.Mime as M
 import Network.Mail.SMTP as S
 import qualified Data.Text as T
-import System.Environment (getArgs)
 import qualified Data.Text.Lazy as L
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Char8 as C8
@@ -27,7 +28,7 @@ safeHead (x:_) = x
 
 getCredentials :: IO (Maybe SesCredentials)
 getCredentials = do
-  raw_creds <- B.readFile "ses_credentials.json"
+  raw_creds <- B.readFile "src/config/ses_credentials.json"
   let creds = decode raw_creds :: Maybe SesCredentials
   return creds
 
@@ -49,9 +50,7 @@ html = S.htmlPart L.empty
 
 sendEmail :: String -> [String] -> FilePath -> IO ()
 sendEmail eFrom eTo filePath = do
-  -- manager <- newTlsManager
-  manager <- getGlobalManager
-  -- manager <- newManager tlsManagerSettings
+  manager <- newTlsManager
   ses_creds <- getCredentials
   case ses_creds of
     Nothing -> putStrLn "NoSesCredentialFound"
@@ -74,14 +73,3 @@ sendEmail eFrom eTo filePath = do
         Just file -> do
           let sMail = S.simpleMail aFrom aTo  cc bcc subject [html, body, file]
           renderSendMailSES manager ses sMail
-
-
-main :: IO ()
-main = do
-  args <- getArgs
-  let
-    addresses = filter (elem '@') args
-    mFrom = head addresses
-    mTo = tail addresses
-    attachment = safeHead $ filter (notElem '@') args
-  sendEmail mFrom mTo attachment
