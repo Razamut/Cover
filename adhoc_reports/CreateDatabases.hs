@@ -61,4 +61,3 @@ main = do
   convertCSVFiletoSQL "connections.csv" "connections.sql" "connections"
     ["id INTEGER","employment TEXT","employer_name TEXT","occupation TEXT","monthly_salary TEXT","mobile_type TEXT","marital_status TEXT","spouse_first_name TEXT","spouse_last_name TEXT","spouse_age TEXT","spouse_employement_status TEXT","home_address TEXT","business_address TEXT","employer_address TEXT","business_description TEXT","fb_acct TEXT","housing_type TEXT","rent_amt REAL","family_size TEXT","n_kids INTEGER","kids_sch_type TEXT","spouse_employed TEXT"]
   convertCSVFiletoSQL "person.csv" "person.sql" "person" ["id INTEGER","first_name TEXT","last_name TEXT","middle_name TEXT","id_number TEXT","id_type TEXT","age REAL","gender TEXT","ph_numbers REAL","email TEXT"]
-  -- putStrLn "Successfully created all databases!"
