@@ -75,7 +75,7 @@ addMonthsToDateTime ioInt dt = do
 getLoanTakeOutDatesAsStrings :: [String] -> IO [(Integer, String)]
 getLoanTakeOutDatesAsStrings loanIds = do
   let query = "SELECT loan_id, take_out_dt FROM loans WHERE loan_id IN " ++ " (" ++ (intercalate ", " loanIds) ++ ")"
-  sqlQueryResult <- queryDatabase "loans.sql" query
+  sqlQueryResult <- queryDatabase "data/loans.sql" query
   let queryResult = zip (readIntegerColumn sqlQueryResult 0) (readStringColumn sqlQueryResult 1)
   return queryResult
 
@@ -93,18 +93,25 @@ combineTuples :: (Integer, String, String) -> (Integer, String, String, Double) 
 combineTuples (a, b, c) (w,x,y,z) | a == w = Just (a,b,c,x,y,z)
                               | otherwise = Nothing
 
+getLoanRecordsFromQuery :: String -> String -> IO [(Integer, String, String, Double, Double)]
+getLoanRecordsFromQuery dbFilePath query = do
+  sqlLoanRecords <- queryDatabase dbFilePath query
+  let loanRecords = zip5 (readIntegerColumn sqlLoanRecords 0) (readStringColumn sqlLoanRecords 1) (readStringColumn sqlLoanRecords 2) (readDoubleColumn sqlLoanRecords 3) (readDoubleColumn sqlLoanRecords 4)
+  return loanRecords
+
+getLoanQueryFromLoanType :: String -> Either String String
+getLoanQueryFromLoanType loanType = case map toLower loanType of
+  "ld" -> Right "SELECT user_id, loan_id, take_out_dt, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND CAST(loan_amt_ld AS DOUBLE) > 0.0"
+  "usd" -> Right "SELECT user_id, loan_id, take_out_dt, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND CAST(loan_amt_usd AS DOUBLE) > 0.0"
+  _  -> Left "Provide a valid loan type. Valid loan types are LD or USD."
+
 getLoanRecords :: String -> String -> IO ( Either String [(Integer, String, String, Double, Double)] )
-getLoanRecords dbName loanType = case map toLower loanType of
-  "ld" -> do
-          let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND CAST(loan_amt_ld AS DOUBLE) > 0.0"
-          records <- getLoanRecordsFromQuery dbName query
-          return $ Right records
-  "usd" -> do
-           let query = "SELECT id, loan_id, take_out_dt, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND CAST(loan_amt_usd AS DOUBLE) > 0.0"
-           records <- getLoanRecordsFromQuery dbName query
-           return $ Right records
-  _   -> do
-         return $ Left "Provide a valid loan type. Valid loan types are LD or USD."
+getLoanRecords dbFilePath loanType = case getLoanQueryFromLoanType loanType of
+  Right query -> do
+                 records <- getLoanRecordsFromQuery dbFilePath query
+                 return $ Right records
+  Left err    -> do
+                 return $ Left err
 
 getExpectedColnRecords :: Either String [(Integer, String, String, Double, Double)] -> Either String [(String, Double)]
 getExpectedColnRecords  loanRecords = case loanRecords of
@@ -112,41 +119,31 @@ getExpectedColnRecords  loanRecords = case loanRecords of
   Left err -> Left err
 
 getColnRecordsFromQuery :: String -> String -> IO [(String, Double)]
-getColnRecordsFromQuery dbName query = do
-  sqlExpectedColnRecords <- queryDatabase dbName query
+getColnRecordsFromQuery dbFilePath query = do
+  sqlExpectedColnRecords <- queryDatabase dbFilePath query
   let expectedColnRecords = zip (readStringColumn sqlExpectedColnRecords 0) (readDoubleColumn sqlExpectedColnRecords 1)
   return expectedColnRecords
 
+getColnQueryFromLoanType :: String -> Either String String
+getColnQueryFromLoanType loanType = case map toLower loanType of
+  "ld" -> Right "SELECT loan_id, payment_amt_ld FROM collections WHERE CAST(payment_amt_ld AS DOUBLE) > 0.0"
+  "usd" -> Right "SELECT loan_id, payment_amt_usd FROM collections WHERE CAST(payment_amt_usd AS DOUBLE) > 0.0"
+  _ -> Left "Provide a valid loan type. Valid loan types are LD or USD."
+
 getColnRecords :: String -> String -> IO ( Either String [(String, Double)] )
-getColnRecords dbName loanType = case map toLower loanType of
-  "ld" -> do
-          let query = "SELECT loan_id, payment_amt_ld FROM collections WHERE CAST(payment_amt_ld AS DOUBLE) > 0.0"
-          records <- getColnRecordsFromQuery dbName query
-          return $ Right records
-  "usd" -> do
-           let query = "SELECT loan_id, payment_amt_usd FROM collections WHERE CAST(payment_amt_usd AS DOUBLE) > 0.0"
-           records <- getColnRecordsFromQuery dbName query
-           return $ Right records
-  _   -> do
-         return $ Left "Provide a valid loan type. Valid loan types are LD or USD."
-
-
-getLoanRecordsFromQuery :: String -> String -> IO [(Integer, String, String, Double, Double)]
-getLoanRecordsFromQuery dbName query = do
-  sqlLoanRecords <- queryDatabase dbName query
-  let loanRecords = zip5 (readIntegerColumn sqlLoanRecords 0) (readStringColumn sqlLoanRecords 1) (readStringColumn sqlLoanRecords 2) (readDoubleColumn sqlLoanRecords 3) (readDoubleColumn sqlLoanRecords 4)
-  return loanRecords
-
-getDebtorsRecords :: [Maybe (Integer, String, String, String, String, Double)] ->
-                    Maybe [(Integer, String, String, String, String, Double)]
-getDebtorsRecords ys = sequenceA $ filter (\x -> x /= Nothing) ys
+getColnRecords dbFilePath loanType = case getColnQueryFromLoanType loanType of
+  Right query -> do
+                 records <- getColnRecordsFromQuery dbFilePath query
+                 return $ Right records
+  Left err    -> do
+                 return $ Left err
 
 
 getNamesForUserIDs :: [Integer] -> IO [(Integer, String, String)]
 getNamesForUserIDs userIDs = do
   let stringyIDs = map show userIDs
-      query = "SELECT id, first_name, last_name FROM person WHERE id IN " ++ " (" ++ (intercalate ", " stringyIDs) ++ ")"
-  sqlQueryResult <- queryDatabase "person.sql" query
+      query = "SELECT user_id, first_name, last_name FROM users WHERE user_id IN " ++ " (" ++ (intercalate ", " stringyIDs) ++ ")"
+  sqlQueryResult <- queryDatabase "data/users.sql" query
   let queryResult = zip3 (readIntegerColumn sqlQueryResult 0) (readStringColumn sqlQueryResult 1) (readStringColumn sqlQueryResult 2)
   return queryResult
 
@@ -165,18 +162,18 @@ idCollections :: String -> [(String, Double)] -> [(String, [Double])]
 idCollections loanID idExpectedCollections  = [(loanID, map (\(_, b) -> b) $ filter (\(a, _) -> a == loanID) idExpectedCollections) ]
 
 idsCollections :: [String] -> [(String, Double)] -> [(String, [Double])]
-idsCollections ids idExpectedCollections = concatMap (\id -> idCollections id idExpectedCollections ) ids
+idsCollections ids idExpectedCollections = concatMap (\user_id -> idCollections user_id idExpectedCollections ) ids
 
 idActualColnMinusExpectedColn :: String -> [(String, Double)] -> [(String, Double)] -> [(String, Double)]
-idActualColnMinusExpectedColn id actuals expectations = [(id, actual - expectation)]
+idActualColnMinusExpectedColn user_id actuals expectations = [(user_id, actual - expectation)]
   where
-    actual  = case filter (\(a,_) -> a == id) actuals of
+    actual  = case filter (\(a,_) -> a == user_id) actuals of
                 [] -> 0.0
-                x:xs -> snd $ head $ filter (\(a,_) -> a == id) actuals
-    expectation = snd $ head $ filter (\(a, _) -> a == id) expectations
+                x:xs -> snd $ head $ filter (\(a,_) -> a == user_id) actuals
+    expectation = snd $ head $ filter (\(a, _) -> a == user_id) expectations
 
 idsActualColnMinusExpectedColn :: [(String, Double)] -> [(String, Double)] -> [(String, Double)]
 idsActualColnMinusExpectedColn actuals expectations =
-  concatMap (\id -> idActualColnMinusExpectedColn id actuals expectations) ids
+  concatMap (\user_id -> idActualColnMinusExpectedColn user_id actuals expectations) ids
   where
     ids = nub $ map (\(x,_) -> x ) expectations
