@@ -2,11 +2,14 @@
 
 import Data.Dates
 import Data.Text (Text)
+import Text.Printf
 import GHC.Generics (Generic)
 import Data.Csv as DC hiding (lookup)
 import Data.Maybe (fromMaybe)
 import Text.CSV
 import Data.List
+import System.Directory
+import System.FilePath.Posix ((</>))
 import Data.Char (toLower)
 import Data.Either
 import Database.HDBC
@@ -37,6 +40,9 @@ instance FromNamedRecord User
 instance ToNamedRecord User
 instance DefaultOrdered User
 
+dbPath = "db" :: FilePath
+oPath = "reports":: FilePath
+
 convertToPerson :: (Integer, String, String, String, String, Double, String, Double) -> User
 convertToPerson (a, b, c, d, e, f, g, h) = User a b c d e f g h
 
@@ -62,7 +68,7 @@ getDebtorsWithDueAmts debtorsWithDueDates dueAmts =
 
 getDebtorsRecords :: [(Integer, String, String, Double, Double)]
                   -> [(String, Double)]
-                  -> IO [ (Integer, String, String, String, String, Double, String, Double) ]
+                  -> IO ( Either String [ (Integer, String, String, String, String, Double, String, Double) ] )
 getDebtorsRecords loanRecs colnRecs = do
   let
       loansExpectedCollections = getLoansExpectedCollections loanRecs
@@ -74,46 +80,66 @@ getDebtorsRecords loanRecs colnRecs = do
       userIDsLoanIDsTakeOutDates = nub $ map (\(a,b,c,_,_) -> (a, b, c)) loanRecs
       usersLoansTakeOutDatesAmts = findUserIDsForLoans loansOutstanding userIDsLoanIDsTakeOutDates
       usersToQuery = map (\(a, _, _, _) -> a) usersLoansTakeOutDatesAmts
-  usersAndIDs <- getNamesForUserIDs usersToQuery
-  let debtorsRecs = fromMaybe [] $ sequenceA $ filter (\x -> x /= Nothing) $ combineTuplesFromLists usersAndIDs usersLoansTakeOutDatesAmts
-      takeOutDates = map (\(_, _, _, _, e, _) -> convertStringToDateTime e ) debtorsRecs
-      numberOfMonthsToAdd = map computeMonthsToAdd takeOutDates
-  listOfMaybeDueDates <- sequenceA $ zipWith addMonthsToDateTime numberOfMonthsToAdd takeOutDates
-  defaultDate <- getCurrentDateTime
-  let dueDates = map (\dt -> fst $ break (==',') $ show $ fromMaybe defaultDate dt) listOfMaybeDueDates
-      debtorsWithDueDates = getDebtorsWithDueDates debtorsRecs dueDates
-      dueAmts = map (\(a, b, c, d, e, f, x) -> fromMaybe 0.0 $ lookup d loansNextExpectedPayment) debtorsWithDueDates
-      debtorsWithDueAmts = getDebtorsWithDueAmts debtorsWithDueDates dueAmts
-  return debtorsWithDueAmts
+  usersAndIDs <- getNamesForUserIDs dbPath "users.sql" usersToQuery
+  case usersAndIDs of
+    Right users -> do
+      let debtorsRecs = fromMaybe [] $ sequenceA $ filter (\x -> x /= Nothing) $ combineTuplesFromLists users usersLoansTakeOutDatesAmts
+          takeOutDates = map (\(_, _, _, _, e, _) -> convertStringToDateTime e ) debtorsRecs
+          numberOfMonthsToAdd = map computeMonthsToAdd takeOutDates
+      listOfMaybeDueDates <- sequenceA $ zipWith addMonthsToDateTime numberOfMonthsToAdd takeOutDates
+      defaultDate <- getCurrentDateTime
+      let dueDates = map (\dt -> fst $ break (==',') $ show $ fromMaybe defaultDate dt) listOfMaybeDueDates
+          debtorsWithDueDates = getDebtorsWithDueDates debtorsRecs dueDates
+          dueAmts = map (\(a, b, c, d, e, f, x) -> fromMaybe 0.0 $ lookup d loansNextExpectedPayment) debtorsWithDueDates
+          debtorsWithDueAmts = getDebtorsWithDueAmts debtorsWithDueDates dueAmts
+      return $ Right debtorsWithDueAmts
+    Left err -> do return $ Left err
 
-getDebtors :: String -> IO (Either String [User])
-getDebtors loanType = do
-  loanRecords <- getLoanRecords "data/loans.sql" loanType
-  collectionRecords <- getColnRecords "data/collections.sql" loanType
-  case loanRecords of
-    Right loanRecs -> do
-      case collectionRecords of
-        Right colnRecs -> do
-          debtorsWithDueAmts <- getDebtorsRecords loanRecs colnRecs
-          let debtors = map convertToPerson debtorsWithDueAmts
-          return $ Right debtors
+getDebtors :: FilePath -> String -> IO (Either String [User])
+getDebtors dbPath loanType = do
+  let loanFileName = "loans.sql"
+      colnFileName = "collections.sql"
+      loansPath = dbPath </> loanFileName
+      colnsPath = dbPath </> colnFileName
+  loanExist <- doesPathExist loansPath
+  colnExist <- doesPathExist colnsPath
+  let pathsExist = loanExist && colnExist
+  case pathsExist of
+    False -> do
+      let err = printf "Either %s or %s does not exist\n" loansPath colnsPath :: String
+      return $ Left err
+    True -> do
+      loanRecords <- getLoanRecords dbPath loanFileName loanType
+      collectionRecords <- getColnRecords dbPath colnFileName loanType
+      case loanRecords of
+        Right loanRecs -> do
+          case collectionRecords of
+            Right colnRecs -> do
+              debtorsWithDueAmts <- getDebtorsRecords loanRecs colnRecs
+              case debtorsWithDueAmts of
+                Right debtRecs -> do
+                  let debtors = map convertToPerson debtRecs
+                  return $ Right debtors
+                Left err -> do return $ Left err
+            Left err -> return $ Left err
         Left err -> return $ Left err
-    Left err -> return $ Left err
 
-saveDebtorsRecordsToCSV :: String -> [User] -> IO ()
-saveDebtorsRecordsToCSV fileName persons = BSL.writeFile fileName $ encodeDefaultOrderedByName persons
+saveDebtorsRecordsToCSV :: FilePath -> [User] -> IO ()
+saveDebtorsRecordsToCSV filePath users = BSL.writeFile filePath $ encodeDefaultOrderedByName users
 
-runGetDebtors :: String -> IO ()
-runGetDebtors [] = return ()
-runGetDebtors xs = do
-  debtors <- getDebtors xs
+runGetDebtors :: FilePath -> FilePath -> String -> IO ()
+runGetDebtors iPath oPath [] = return ()
+runGetDebtors iPath oPath xs = do
+  debtors <- getDebtors iPath xs
   case debtors of
     Right records -> do
-      saveDebtorsRecordsToCSV ("data/" ++ xs ++ "_debtors.csv") records
-      putStrLn $ "created " ++ xs ++ "_debtors.csv file"
+      createDirectoryIfMissing True oPath
+      let oFile = oPath </> (xs ++ "_debtors.csv")
+      saveDebtorsRecordsToCSV oFile records
+      printf "created file %s\n" oFile
     Left err -> putStrLn err
 
 main :: IO ()
 main = do
   loanTypes <- getArgs
-  mapM_ runGetDebtors loanTypes
+  mapM_ (runGetDebtors dbPath oPath) loanTypes
