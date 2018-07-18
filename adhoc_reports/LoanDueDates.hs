@@ -66,6 +66,12 @@ getDebtorsWithDueAmts :: [(Integer, String, String, String, String, Double, Stri
 getDebtorsWithDueAmts debtorsWithDueDates dueAmts =
   zipWith (\(a, b, c, d, e, f, x) y -> (a, b, c, d, e, f, x, minimum [(-f), y])) debtorsWithDueDates dueAmts
 
+getLoanIDs :: [(String, Double)] -> [String]
+getLoanIDs = (\r -> nub $ map (\(x,_) -> x ) r )
+
+getLoansCollections :: [(String, Double)] -> [(String, [Double])]
+getLoansCollections = getLoanIDs >>= idsCollections
+
 getDebtorsRecords :: [(Integer, String, String, Double, Double)]
                   -> [(String, Double)]
                   -> IO ( Either String [ (Integer, String, String, String, String, Double, String, Double) ] )
@@ -73,8 +79,8 @@ getDebtorsRecords loanRecs colnRecs = do
   let
       loansExpectedCollections = getLoansExpectedCollections loanRecs
       loansNextExpectedPayment = getLoansNextExpectedPayment loanRecs
-      loanIDs = nub $ map (\(x,_) -> x ) colnRecs
-      loansCollections = idsCollections loanIDs colnRecs
+      loanIDs = getLoanIDs colnRecs
+      loansCollections = getLoansCollections colnRecs
       loansTotalCollections = map (\(a, b) -> (a, sum b)) loansCollections
       loansOutstanding = filter  (\(_, y) -> y < 0) $  idsActualColnMinusExpectedColn  loansTotalCollections loansExpectedCollections
       userIDsLoanIDsTakeOutDates = nub $ map (\(a,b,c,_,_) -> (a, b, c)) loanRecs
@@ -95,19 +101,14 @@ getDebtorsRecords loanRecs colnRecs = do
       return $ Right debtorsWithDueAmts
     Left err -> do return $ Left err
 
-getDebtors :: FilePath -> String -> IO (Either String [User])
-getDebtors dbPath loanType = do
-  let loanFileName = "loans.sql"
-      colnFileName = "collections.sql"
-      loansPath = dbPath </> loanFileName
+getDebtors :: FilePath -> String -> String-> String -> IO (Either String [User])
+getDebtors dbPath loanFileName colnFileName loanType = do
+  let loansPath = dbPath </> loanFileName
       colnsPath = dbPath </> colnFileName
   loanExist <- doesPathExist loansPath
   colnExist <- doesPathExist colnsPath
   let pathsExist = loanExist && colnExist
   case pathsExist of
-    False -> do
-      let err = printf "Either %s or %s does not exist\n" loansPath colnsPath :: String
-      return $ Left err
     True -> do
       loanRecords <- getLoanRecords dbPath loanFileName loanType
       collectionRecords <- getColnRecords dbPath colnFileName loanType
@@ -123,14 +124,18 @@ getDebtors dbPath loanType = do
                 Left err -> do return $ Left err
             Left err -> return $ Left err
         Left err -> return $ Left err
+    False -> do
+      let err = printf "Either %s or %s does not exist\n" loansPath colnsPath :: String
+      return $ Left err
+
 
 saveDebtorsRecordsToCSV :: FilePath -> [User] -> IO ()
 saveDebtorsRecordsToCSV filePath users = BSL.writeFile filePath $ encodeDefaultOrderedByName users
 
-runGetDebtors :: FilePath -> FilePath -> String -> IO ()
-runGetDebtors iPath oPath [] = return ()
-runGetDebtors iPath oPath xs = do
-  debtors <- getDebtors iPath xs
+runGetDebtors :: FilePath -> FilePath -> String -> String -> String -> IO ()
+runGetDebtors iPath oPath loanFileName colnFileName [] = return ()
+runGetDebtors iPath oPath loanFileName colnFileName xs = do
+  debtors <- getDebtors iPath loanFileName colnFileName xs
   case debtors of
     Right records -> do
       createDirectoryIfMissing True oPath
@@ -142,4 +147,4 @@ runGetDebtors iPath oPath xs = do
 main :: IO ()
 main = do
   loanTypes <- getArgs
-  mapM_ (runGetDebtors dbPath oPath) loanTypes
+  mapM_ (runGetDebtors dbPath oPath "loans.sql" "collections.sql") loanTypes

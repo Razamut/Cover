@@ -16,12 +16,12 @@ queryDatabase dbPath fileName sqlQuery = do
   let iFile = dbPath </> fileName
   fileExists <- doesPathExist iFile
   case fileExists of
-    False -> return $ Left (printf "File %s does not exist\n" iFile)
     True -> do
       conn <- connectSqlite3 iFile
       result <- quickQuery' conn sqlQuery []
       disconnect conn
       return $ Right result
+    False -> return $ Left (printf "File %s does not exist\n" iFile)
 
 readIntegerColumn :: [[SqlValue]]  -> Integer -> [Integer]
 readIntegerColumn sqlResult index =
@@ -81,17 +81,15 @@ addMonthsToDateTime ioInt dt = do
     Just dateTime -> return $ Just $ addInterval dateTime $ Days $ n * 30
     _             -> return $ Nothing
 
-
 getLoanTakeOutDatesAsStrings :: FilePath -> [String] -> IO ( Either String [(Integer, String)] )
 getLoanTakeOutDatesAsStrings iPath loanIds = do
   let query = "SELECT loan_id, take_out_dt FROM loans WHERE loan_id IN " ++ " (" ++ (intercalate ", " loanIds) ++ ")"
   sqlQueryResult <- queryDatabase iPath "loans.sql" query
   case sqlQueryResult of
-    Left err -> do return $ Left err
     Right sqlRes -> do
       let queryResult = zip (readIntegerColumn sqlRes 0) (readStringColumn sqlRes 1)
       return $ Right queryResult
-
+    Left err -> do return $ Left err
 
 nextDueAmt :: Double -> Double -> Double
 nextDueAmt rate totalLoan = if rate == 15.0 then
@@ -110,10 +108,10 @@ getLoanRecordsFromQuery :: FilePath -> String -> String -> IO ( Either String [(
 getLoanRecordsFromQuery iPath fileName query = do
   sqlLoanRecords <- queryDatabase iPath fileName query
   case sqlLoanRecords of
-    Left err -> do return $ Left err
     Right sqlRecs -> do
       let loanRecords = zip5 (readIntegerColumn sqlRecs 0) (readStringColumn sqlRecs 1) (readStringColumn sqlRecs 2) (readDoubleColumn sqlRecs 3) (readDoubleColumn sqlRecs 4)
       return $ Right loanRecords
+    Left err -> do return $ Left err
 
 getLoanQueryFromLoanType :: String -> Either String String
 getLoanQueryFromLoanType loanType = case map toLower loanType of
@@ -140,10 +138,10 @@ getColnRecordsFromQuery :: FilePath -> String -> String -> IO ( Either String [(
 getColnRecordsFromQuery iPath fileName query = do
   sqlExpectedColnRecords <- queryDatabase iPath fileName query
   case sqlExpectedColnRecords of
-    Left err -> do return $ Left err
     Right sqlRecs -> do
       let expectedColnRecords = zip (readStringColumn sqlRecs 0) (readDoubleColumn sqlRecs 1)
       return $ Right expectedColnRecords
+    Left err -> do return $ Left err
 
 getColnQueryFromLoanType :: String -> Either String String
 getColnQueryFromLoanType loanType = case map toLower loanType of
@@ -184,10 +182,10 @@ findUserIDForLoan loanIDamtPair userIDsLoanIDsTakeOutDates = userIDloanIDTakeOut
     userIDloanIDTakeOutDateAmt = (theUserID, fst loanIDamtPair, takeOutDate, snd loanIDamtPair)
 
 idCollections :: String -> [(String, Double)] -> [(String, [Double])]
-idCollections loanID idExpectedCollections  = [(loanID, map (\(_, b) -> b) $ filter (\(a, _) -> a == loanID) idExpectedCollections) ]
+idCollections loanID idExpectedCollections = [(loanID, map (\(_, b) -> b) $ filter (\(a, _) -> a == loanID) idExpectedCollections) ]
 
 idsCollections :: [String] -> [(String, Double)] -> [(String, [Double])]
-idsCollections ids idExpectedCollections = concatMap (\user_id -> idCollections user_id idExpectedCollections ) ids
+idsCollections = \a -> \r -> concatMap (\user_id -> idCollections user_id r ) a
 
 idActualColnMinusExpectedColn :: String -> [(String, Double)] -> [(String, Double)] -> [(String, Double)]
 idActualColnMinusExpectedColn user_id actuals expectations = [(user_id, actual - expectation)]
