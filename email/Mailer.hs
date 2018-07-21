@@ -1,5 +1,3 @@
-module Mail where
-
 import Data.Aeson
 import Control.Applicative
 import Network.Mail.Mime.SES
