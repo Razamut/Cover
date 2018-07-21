@@ -1,5 +1,3 @@
-module LoanSummary where
-
 import Data.List
 import Data.Char (toLower, isSpace)
 import Text.CSV
@@ -16,24 +14,31 @@ import UtilityFunctions (queryDatabase, readDoubleColumn, readStringColumn, read
 plotList [PNG "gnu_line.png", Title "line", YRange (0.0, 20.0)] (zip [1..] values)
 -}
 
-getLoanRecordsFromQuery :: String -> String -> IO [(String, Double, Double)]
-getLoanRecordsFromQuery dbName query = do
-  sqlLoanRecords <- queryDatabase dbName query
-  let loanRecords = zip3 (readStringColumn sqlLoanRecords 0) (readDoubleColumn sqlLoanRecords 1) (readDoubleColumn sqlLoanRecords 2)
-  return loanRecords
+dbPath = "db" :: FilePath
 
-getLoanRecords :: String -> String -> IO ( Either String [(String, Double, Double)] )
-getLoanRecords dbName loanType = case map toLower loanType of
-  "ld" -> do
-            let query = "SELECT loan_type, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND CAST(loan_amt_ld AS DOUBLE) > 0.0"
-            records <- getLoanRecordsFromQuery dbName query
-            return $ Right records
-  "usd" -> do
-             let query = "SELECT loan_type, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND CAST(loan_amt_usd AS DOUBLE) > 0.0"
-             records <- getLoanRecordsFromQuery dbName query
-             return $ Right records
-  _   -> do
-           return $ Left "Provide a valid loan type. Valid loan types are LD or USD."
+getLoanRecordsFromQuery :: FilePath -> String -> String -> IO ( Either String [(String, Double, Double)] )
+getLoanRecordsFromQuery iPath fileName query = do
+  sqlLoanRecords <- queryDatabase iPath fileName query
+  case sqlLoanRecords of
+    Right sqlRecs -> do
+      let loanRecords = zip3 (readStringColumn sqlRecs 0) (readDoubleColumn sqlRecs 1) (readDoubleColumn sqlRecs 2)
+      return $ Right loanRecords
+    Left err -> do return $ Left err
+
+getLoanQueryFromLoanType :: String -> Either String String
+getLoanQueryFromLoanType loanType = case map toLower loanType of
+  "ld" -> Right "SELECT loan_type, rate, loan_amt_ld FROM loans WHERE status = 'approved' AND CAST(loan_amt_ld AS DOUBLE) > 0.0"
+  "usd" -> Right "SELECT loan_type, rate, loan_amt_usd FROM loans WHERE status = 'approved' AND CAST(loan_amt_usd AS DOUBLE) > 0.0"
+  _  -> Left "Provide a valid loan type. Valid loan types are LD or USD."
+
+getLoanRecords :: FilePath -> String -> String -> IO ( Either String [(String, Double, Double)] )
+getLoanRecords iPath fileName loanType = case getLoanQueryFromLoanType loanType of
+  Right query -> do
+                 records <- getLoanRecordsFromQuery iPath fileName query
+                 return records
+  Left err    -> do
+                 return $ Left err
+
 
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -50,9 +55,9 @@ getLoansDisbursed' records = (totalLoans, totalPersonalLoans, totalBusinessLoans
     totalBusinessLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> lowerTrim a == "b") loanTypeAmt
     totalOtherLoans = sum $ map (\(_, b) -> b) $ filter (\(a, b) -> and [lowerTrim a /= "p", lowerTrim a /= "b"] ) loanTypeAmt
 
-getLoansDisbursed :: String -> IO ()
-getLoansDisbursed loanType = do
-  loanRecords <- getLoanRecords "loans.sql" loanType
+getLoansDisbursed :: FilePath -> String -> String -> IO ()
+getLoansDisbursed iPath fileName loanType = do
+  loanRecords <- getLoanRecords iPath fileName loanType  --"loans.sql" loanType
   case loanRecords of
     Right records -> do
       let disbursedRecord = getLoansDisbursed' records
@@ -62,10 +67,10 @@ getLoansDisbursed loanType = do
       putStrLn $ "other loans disbursed = " ++ show ((\(_,_,_,d) -> d) disbursedRecord)
     Left err -> putStrLn err
 
-getTotalDisbursed :: Double -> IO Double
-getTotalDisbursed exchangeRate = do
-  ldLoanRecords <- getLoanRecords "loans.sql" "LD"
-  usdLoanRecords <- getLoanRecords "loans.sql" "USD"
+getTotalDisbursed :: FilePath -> String -> Double -> IO Double
+getTotalDisbursed iPath fileName exchangeRate = do
+  ldLoanRecords <- getLoanRecords iPath fileName "LD"
+  usdLoanRecords <- getLoanRecords iPath fileName "USD"
   let usdTotalDisbursed = (\(a,_,_,_) -> a) $ getLoansDisbursed' $ (\(Right x) -> x) usdLoanRecords
       ldTotalDisbursed = (\(a,_,_,_) -> a) $ getLoansDisbursed' $ (\(Right x) -> x) ldLoanRecords
   return $ ldTotalDisbursed / exchangeRate + usdTotalDisbursed
@@ -76,57 +81,65 @@ getExpectedCollection' records = totalExpectedCollections
     loanTypeExpectedCollections = map (\(a, b, c) -> (a, c + b / 100.0 * c)) records
     totalExpectedCollections = sum $ map (\(_, b) -> b) loanTypeExpectedCollections
 
-getExpectedCollection :: String -> IO (Either String Double)
-getExpectedCollection loanType = do
-  loanRecords <- getLoanRecords "loans.sql" loanType
+getExpectedCollection :: FilePath -> String -> String -> IO (Either String Double)
+getExpectedCollection iPath fileName loanType = do
+  loanRecords <- getLoanRecords iPath fileName loanType
   case loanRecords of
     Right records -> return $ Right (getExpectedCollection' records)
     Left err -> return $ Left err
 
-getTotalExpectedCollection :: Double -> IO Double
-getTotalExpectedCollection exchangeRate = do
-  ldExpectedCollection <- getExpectedCollection "LD"
-  usdExpectedCollection <- getExpectedCollection "USD"
+getTotalExpectedCollection :: FilePath -> String -> Double -> IO Double
+getTotalExpectedCollection iPath fileName exchangeRate = do
+  ldExpectedCollection <- getExpectedCollection iPath fileName "LD"
+  usdExpectedCollection <- getExpectedCollection iPath fileName "USD"
   let totalExpected = ( ((\(Right x) -> x) ldExpectedCollection) / exchangeRate  ) + ( (\(Right x) -> x) usdExpectedCollection )
   return totalExpected
 
-getTotalCollectionRecords :: Double -> IO (Double, Double, Double)
-getTotalCollectionRecords xchangeRate = do
-  sqlCollectionRecords <- queryDatabase "collections.sql" "SELECT payment_amt_ld, payment_amt_usd FROM collections WHERE CAST(payment_amt_ld AS DOUBLE) > 0.0 OR CAST(payment_amt_usd AS DOUBLE) > 0.0"
-  let collectionRecords = zip (readDoubleColumn sqlCollectionRecords 0) (readDoubleColumn sqlCollectionRecords 1)
-      ldTotalCollections = sum $ map (\(a,_) -> a) collectionRecords
-      usdTotalCollections = sum $ map (\(_, b) -> b) collectionRecords
-      totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
-  return (totalCollection, ldTotalCollections, usdTotalCollections)
+getTotalCollectionRecords :: FilePath -> String -> Double -> IO (Either String (Double, Double, Double) )
+getTotalCollectionRecords iPath fileName xchangeRate = do
+  sqlCollectionRecords <- queryDatabase iPath fileName "SELECT payment_amt_ld, payment_amt_usd FROM collections WHERE CAST(payment_amt_ld AS DOUBLE) > 0.0 OR CAST(payment_amt_usd AS DOUBLE) > 0.0"
+  case sqlCollectionRecords of
+    Right sqlRecs -> do
+      let collectionRecords = zip (readDoubleColumn sqlRecs 0) (readDoubleColumn sqlRecs 1)
+          ldTotalCollections = sum $ map (\(a,_) -> a) collectionRecords
+          usdTotalCollections = sum $ map (\(_, b) -> b) collectionRecords
+          totalCollection = ldTotalCollections / xchangeRate + usdTotalCollections
+      return $ Right (totalCollection, ldTotalCollections, usdTotalCollections)
+    Left err -> do return $ Left err
 
 xchangeRate :: Double
 xchangeRate = 115.0
+loanFile = "loans.sql" :: String
+collectionsFile = "collections.sql" :: String
 
 main :: IO ()
 main = do
   putStrLn "LD PORTFOLIO :"
-  getLoansDisbursed "LD"
+  getLoansDisbursed dbPath loanFile "LD"
   putStrLn "USD PORTFOLIO :"
-  getLoansDisbursed "USD"
-  totalDisbursed <- getTotalDisbursed xchangeRate
+  getLoansDisbursed dbPath loanFile "USD"
+  totalDisbursed <- getTotalDisbursed dbPath loanFile xchangeRate
   putStrLn $ "Total (LD + USD) Disbursed Loans = " ++ show totalDisbursed
   putStrLn "LD Expected Collections:"
-  ldExpected <- getExpectedCollection "LD"
+  ldExpected <- getExpectedCollection dbPath loanFile "LD"
   case ldExpected of
     Right value -> putStrLn $ "expected collection = " ++ show value
     Left err -> putStrLn err
   putStrLn "USD Expected Collections:"
-  usdExpected <- getExpectedCollection "USD"
+  usdExpected <- getExpectedCollection dbPath loanFile "USD"
   case usdExpected of
     Right value -> putStrLn $ "expected collection = " ++ show value
     Left err -> putStrLn err
-  totalExpected <- getTotalExpectedCollection xchangeRate
+  totalExpected <- getTotalExpectedCollection dbPath loanFile xchangeRate
   putStrLn $ "total expected collection = " ++ show totalExpected
-  collectionRecord <- getTotalCollectionRecords xchangeRate
-  putStrLn $ "total collection = " ++ show ((\(a,_,_) -> a) collectionRecord)
-  putStrLn $ "LD collections = " ++ show ((\(_,b,_) -> b) collectionRecord)
-  putStrLn $ "USD collections = " ++ show ((\(_,_,c) -> c) collectionRecord)
-  putStrLn "total outstanding : "
-  let totalCollection = ((\(a,_,_) -> a) collectionRecord)
-      totalOutstanding = totalExpected - totalCollection
-  print $ totalOutstanding
+  collectionRecord <- getTotalCollectionRecords dbPath collectionsFile xchangeRate
+  case collectionRecord of
+    Right collRec -> do
+      putStrLn $ "total collection = " ++ show ((\(a,_,_) -> a) collRec)
+      putStrLn $ "LD collections = " ++ show ((\(_,b,_) -> b) collRec)
+      putStrLn $ "USD collections = " ++ show ((\(_,_,c) -> c) collRec)
+      putStrLn "total outstanding : "
+      let totalCollection = ((\(a,_,_) -> a) collRec)
+          totalOutstanding = totalExpected - totalCollection
+      print $ totalOutstanding
+    Left err -> putStrLn err
