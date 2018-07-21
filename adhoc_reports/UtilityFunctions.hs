@@ -123,9 +123,10 @@ getLoanRecords :: FilePath -> String -> String -> IO ( Either String [(Integer, 
 getLoanRecords iPath fileName loanType = case getLoanQueryFromLoanType loanType of
   Right query -> do
                  records <- getLoanRecordsFromQuery iPath fileName query
-                 case records of
-                   Right recs -> do return $ Right recs
-                   Left  err  -> do return $ Left err
+                 return records
+                 -- case records of
+                 --   Right recs -> do return $ Right recs
+                 --   Left  err  -> do return $ Left err
   Left err    -> do
                  return $ Left err
 
