@@ -47,7 +47,7 @@ html = S.htmlPart L.empty
 
 sendEmail :: String -> [String] -> FilePath -> IO ()
 sendEmail eFrom eTo filePath = do
-  -- manager <- newTlsManager 
+  -- manager <- newTlsManager
   manager <- getGlobalManager
   -- manager <- newManager tlsManagerSettings
   ses_creds <- getCredentials
