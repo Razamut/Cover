@@ -6,3 +6,4 @@ $ cd email-sender
 $ stack build  
 to execute do  
 $ stack exec email-sender-exe \<from\> \<to\> \<path-to-attachment-if-any\>  
+  \<path-to-ses-credential-file\>

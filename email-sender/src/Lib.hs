@@ -1,5 +1,5 @@
 module Lib
-    ( sendEmail, safeHead
+    ( sendEmail, getCredentials, safeHead
     ) where
 
 import Data.Aeson
@@ -22,15 +22,15 @@ instance FromJSON SesCredentials where
                           <$> (v .: (T.pack "user"))
                           <*> (v .: (T.pack "pass"))
 
+getCredentials :: FilePath -> IO (Maybe SesCredentials)
+getCredentials  = \filePath -> do
+  raw_creds <- B.readFile filePath
+  let creds = decode raw_creds :: Maybe SesCredentials
+  return creds
+
 safeHead :: [String] -> String
 safeHead [] = []
 safeHead (x:_) = x
-
-getCredentials :: IO (Maybe SesCredentials)
-getCredentials = do
-  raw_creds <- B.readFile "src/config/ses_credentials.json"
-  let creds = decode raw_creds :: Maybe SesCredentials
-  return creds
 
 getAttachment :: FilePath -> IO (Maybe Part)
 getAttachment filePath = do
@@ -48,13 +48,16 @@ body = S.plainTextPart $ L.pack ("Hello,\n" ++ "\n" ++
   "Sincerely, \n" ++ "Data Science Team")
 html = S.htmlPart L.empty
 
-sendEmail :: String -> [String] -> FilePath -> IO ()
-sendEmail eFrom eTo filePath = do
-  manager <- newTlsManager
-  ses_creds <- getCredentials
+sendEmail :: String
+   -> [String]
+   -> FilePath
+   -> Maybe SesCredentials
+   -> IO ()
+sendEmail eFrom eTo filePath  ses_creds  = do
   case ses_creds of
     Nothing -> putStrLn "NoSesCredentialFound"
     Just cred -> do
+      manager <- newTlsManager
       let
         seAccessKey = C8.pack $ user cred
         seSecretKey = C8.pack $ pass cred
