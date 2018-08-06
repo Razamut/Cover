@@ -1,6 +1,7 @@
 import Data.List
 import Data.Char (toLower, isSpace)
 import Text.CSV
+import Text.Printf
 import Data.Either
 import Database.HDBC
 import Database.HDBC.Sqlite3
@@ -109,37 +110,45 @@ getTotalCollectionRecords iPath fileName xchangeRate = do
 
 xchangeRate :: Double
 xchangeRate = 115.0
+expenses = 225.0 :: Double
+initCapital = 5000.0 :: Double
 loanFile = "loans.sql" :: String
 collectionsFile = "collections.sql" :: String
 
 main :: IO ()
 main = do
-  putStrLn "LD PORTFOLIO :"
-  getLoansDisbursed dbPath loanFile "LD"
-  putStrLn "USD PORTFOLIO :"
-  getLoansDisbursed dbPath loanFile "USD"
+  -- putStrLn "LD PORTFOLIO :"
+  -- getLoansDisbursed dbPath loanFile "LD"
+  -- putStrLn "USD PORTFOLIO :"
+  -- getLoansDisbursed dbPath loanFile "USD"
   totalDisbursed <- getTotalDisbursed dbPath loanFile xchangeRate
-  putStrLn $ "Total (LD + USD) Disbursed Loans = " ++ show totalDisbursed
-  putStrLn "LD Expected Collections:"
-  ldExpected <- getExpectedCollection dbPath loanFile "LD"
-  case ldExpected of
-    Right value -> putStrLn $ "expected collection = " ++ show value
-    Left err -> putStrLn err
-  putStrLn "USD Expected Collections:"
-  usdExpected <- getExpectedCollection dbPath loanFile "USD"
-  case usdExpected of
-    Right value -> putStrLn $ "expected collection = " ++ show value
-    Left err -> putStrLn err
+  printf "Total (LD + USD) Disbursed Loans = %.2f\n" totalDisbursed
+  -- putStrLn "LD Expected Collections:"
+  -- ldExpected <- getExpectedCollection dbPath loanFile "LD"
+  -- case ldExpected of
+    -- Right value -> putStrLn $ "expected collection = " ++ show value
+    -- Left err -> putStrLn err
+  -- putStrLn "USD Expected Collections:"
+  -- usdExpected <- getExpectedCollection dbPath loanFile "USD"
+  -- case usdExpected of
+    -- Right value -> putStrLn $ "expected collection = " ++ show value
+    -- Left err -> putStrLn err
   totalExpected <- getTotalExpectedCollection dbPath loanFile xchangeRate
-  putStrLn $ "total expected collection = " ++ show totalExpected
+  printf "total expected collection = %.2f\n" totalExpected
   collectionRecord <- getTotalCollectionRecords dbPath collectionsFile xchangeRate
   case collectionRecord of
     Right collRec -> do
-      putStrLn $ "total collection = " ++ show ((\(a,_,_) -> a) collRec)
-      putStrLn $ "LD collections = " ++ show ((\(_,b,_) -> b) collRec)
-      putStrLn $ "USD collections = " ++ show ((\(_,_,c) -> c) collRec)
-      putStrLn "total outstanding : "
+      -- putStrLn $ "total collection = " ++ show ((\(a,_,_) -> a) collRec)
+      -- putStrLn $ "LD collections = " ++ show ((\(_,b,_) -> b) collRec)
+      -- putStrLn $ "USD collections = " ++ show ((\(_,_,c) -> c) collRec)
+
       let totalCollection = ((\(a,_,_) -> a) collRec)
           totalOutstanding = totalExpected - totalCollection
-      print $ totalOutstanding
+          interest = totalExpected - totalDisbursed
+          onhandCapital = initCapital - totalDisbursed + totalCollection - expenses
+          portfolioValue = onhandCapital + totalOutstanding
+      printf "Total interest = %.2f\n" interest
+      printf "Total on hand capital = %.2f\n" onhandCapital
+      printf "Total outstanding = %.2f\n" totalOutstanding
+      printf "Total portfolio value = %.2f\n" portfolioValue
     Left err -> putStrLn err
